@@ -57,6 +57,12 @@ const List<_SettingsGroup> _settingsGroups = [
     title: '资源',
     categories: [
       _SettingsCategory(
+        label: '影视资料库',
+        description: 'TMDB 影视检索凭据',
+        icon: Icons.movie_filter_outlined,
+        path: '/settings/video-catalog',
+      ),
+      _SettingsCategory(
         label: '规则管理',
         description: '番剧资源规则',
         icon: Icons.extension_rounded,
