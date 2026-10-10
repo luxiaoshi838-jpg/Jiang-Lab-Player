@@ -1,11 +1,7 @@
 name: Bootstrap and build 随播
 on:
   push:
-    paths:
-      - ".github/workflows/bootstrap.yml"
-      - "scripts/prepare_suibo.py"
-      - "lib/pages/suibo/**"
-      - "README.md"
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -68,6 +64,8 @@ jobs:
           cache: true
       - name: Flutter dependencies
         run: flutter pub get
+      - name: Verify unified search and collection regression tests
+        run: flutter test test/suibo_unified_media_test.dart test/bangumi_search_params_test.dart test/collect_sync_test.dart
       - name: Build Android debug APK (not release-signed)
         run: flutter build apk --debug
       - uses: actions/upload-artifact@v4
