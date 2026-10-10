@@ -31,6 +31,9 @@ abstract class _InfoController with Store {
   @observable
   var pluginSearchStatus = ObservableMap<String, PluginSearchStatus>();
 
+  /// User-visible, sanitized network/rule failure hints per installed source.
+  final pluginSearchFailureHints = ObservableMap<String, String>();
+
   @observable
   var commentsList = ObservableList<CommentItem>();
 
