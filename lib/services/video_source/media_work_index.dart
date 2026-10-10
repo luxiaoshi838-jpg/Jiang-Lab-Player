@@ -7,18 +7,18 @@ class MediaWorkIndex {
   static String normalized(String input) => input
       .trim()
       .toLowerCase()
-      .replaceAll(RegExp(r'[\\s·•:：.。!！?？《》〈〉【】\[\]（）(),，、]'), '');
+      .replaceAll(RegExp(r'[\s·•:：.。!！?？《》〈〉【】\[\]（）(),，、]'), '');
 
   static String? yearOf(BangumiItem item) {
     if (item.airDate.length >= 4 &&
-        RegExp(r'^(19|20)\\d{2}$').hasMatch(item.airDate.substring(0, 4))) {
+        RegExp(r'^(19|20)\d{2}$').hasMatch(item.airDate.substring(0, 4))) {
       return item.airDate.substring(0, 4);
     }
     return explicitYear(item.nameCn) ?? explicitYear(item.name);
   }
 
   static String? explicitYear(String name) {
-    final found = RegExp(r'(?:^|[（(\\s])((?:19|20)\\d{2})(?:[）)\\s]|$)')
+    final found = RegExp(r'(?:^|[（(\s])((?:19|20)\d{2})(?:[）)\s]|$)')
         .firstMatch(name);
     return found?.group(1);
   }
@@ -49,32 +49,25 @@ class MediaWorkIndex {
       works.add(incoming);
       return;
     }
-    // Genuine Bangumi entries stay authoritative. A wiki/TVmaze catalog
-    // entry may replace a rule-only shell, but not another verified catalog.
-    if (!match.isExternal || !match.sourcePlugin.startsWith('来源：') &&
-        match.sourcePlugin != '') {
-      final isCatalog = match.sourcePlugin == '百科影视目录' ||
-          match.sourcePlugin == 'TVmaze节目目录';
-      if (!isCatalog) {
-        if (incoming.isExternal) return;
-        if (!match.isExternal) return;
-      }
+    // A genuine Bangumi item always wins. External metadata replaces a
+    // rule-only shell, but another catalog cannot replace existing metadata.
+    if (!match.isExternal) return;
+    final existingIsCatalog = match.sourcePlugin == '百科影视目录' ||
+        match.sourcePlugin == 'TVmaze节目目录';
+    final incomingIsCatalog = incoming.sourcePlugin == '百科影视目录' ||
+        incoming.sourcePlugin == 'TVmaze节目目录';
+    if (incoming.isExternal && (existingIsCatalog || !incomingIsCatalog)) {
+      return;
     }
-    if (!incoming.isExternal || (match.isExternal &&
-        match.sourcePlugin != '百科影视目录' &&
-        match.sourcePlugin != 'TVmaze节目目录')) {
-      incoming.discoveredSources.addAll(match.discoveredSources);
-      if (match.isExternal && !{
-        '百科影视目录', 'TVmaze节目目录',
-      }.contains(match.sourcePlugin)) {
-        addCandidate(incoming, MediaSourceCandidate(
-          pluginName: match.sourcePlugin,
-          title: match.nameCn,
-          url: match.sourceUrl,
-        ));
-      }
-      works[works.indexOf(match)] = incoming;
+    incoming.discoveredSources.addAll(match.discoveredSources);
+    if (!existingIsCatalog) {
+      addCandidate(incoming, MediaSourceCandidate(
+        pluginName: match.sourcePlugin,
+        title: match.nameCn,
+        url: match.sourceUrl,
+      ));
     }
+    works[works.indexOf(match)] = incoming;
   }
 
   static void addCandidate(BangumiItem item, MediaSourceCandidate candidate) {
