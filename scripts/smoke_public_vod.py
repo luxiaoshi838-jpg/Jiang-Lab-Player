@@ -52,8 +52,20 @@ def main():
             url = urllib.parse.urlparse(raw)
             if url.scheme != "https" or not url.hostname or not url.path.endswith(".m3u8"):
                 continue
-            # Do not download user-generated video; verify a real HLS URL exists.
-            print("PASS: actual public search -> video detail -> HLS playlist URL")
+            # Fetch only the small manifest, never download video segments.
+            # A nominal playlist URL can still be a 404, HTML or forbidden page.
+            try:
+                request = urllib.request.Request(raw, headers={
+                    "Accept": "application/vnd.apple.mpegurl",
+                    "User-Agent": "Suibo-VOD-Smoke/1.0",
+                })
+                with urllib.request.urlopen(request, timeout=12) as response:
+                    manifest = response.read(32768)
+                if not manifest.lstrip().startswith(b"#EXTM3U"):
+                    continue
+            except urllib.error.URLError:
+                continue
+            print("PASS: public search -> detail -> fetched valid HLS manifest")
             print("Public result title:", str(video.get("name", ""))[:90])
             print("Public HLS host:", url.hostname)
             return 0
