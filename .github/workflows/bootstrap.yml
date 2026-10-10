@@ -9,7 +9,7 @@ permissions:
 
 concurrency:
   group: suibo-bootstrap
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   import-source:
