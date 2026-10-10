@@ -569,6 +569,8 @@ abstract class _VideoPageController with Store implements Disposable {
                 ? bangumiItem.nameCn
                 : bangumiItem.name,
             episode: params.danmakuEpisodeNumber,
+            episodeTitle: params.episodeTitle,
+            titleAliases: [bangumiItem.nameCn, bangumiItem.name],
             pageUrls: [params.pageUrl, src, bangumiItem.sourceUrl],
           );
           result = DanmakuLoadResult.success(
@@ -600,6 +602,8 @@ abstract class _VideoPageController with Store implements Disposable {
                 ? bangumiItem.nameCn
                 : bangumiItem.name,
             episode: params.danmakuEpisodeNumber,
+            episodeTitle: params.episodeTitle,
+            titleAliases: [bangumiItem.nameCn, bangumiItem.name],
             pageUrls: [params.pageUrl, src],
           );
           if (matched != null && matched.entries.isNotEmpty) {
