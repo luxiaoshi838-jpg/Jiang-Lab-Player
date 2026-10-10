@@ -82,7 +82,7 @@ tasks.matching { it.name == 'preReleaseBuild' }.configureEach {
 }
 
 """
-        src = src.replace("\\nflutter {\\n", "\\n" + verify_task + "flutter {\\n", 1)
+        src = src.replace("\nflutter {\n", "\n" + verify_task + "flutter {\n", 1)
         gradle.write_text(src, encoding="utf-8")
     ignore = ROOT / ".gitignore"
     private_entries = "\n# 随播私有签名资料（禁止上传）\n*.jks\n*.keystore\nkey.properties\n**/key.properties\n"
