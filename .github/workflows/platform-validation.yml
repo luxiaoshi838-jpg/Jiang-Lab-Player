@@ -1,0 +1,59 @@
+name: Suibo Android Windows release-candidate validation
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: suibo-platform-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Core media, rule, storage and danmaku regressions
+        run: |
+          flutter test test/suibo_unified_media_test.dart test/bangumi_search_params_test.dart test/public_video_catalog_test.dart test/tvmaze_catalog_test.dart test/collect_sync_test.dart test/services/video_source/media_work_index_test.dart test/services/video_source/video_source_failure_test.dart test/services/danmaku/media_danmaku_match_test.dart test/services/danmaku/manual_danmaku_link_store_test.dart
+      - name: Static check in completed feature areas
+        run: |
+          flutter analyze lib/pages/search/search_controller.dart lib/pages/info/source_sheet.dart lib/pages/info/source_sheet_view.dart lib/pages/video/video_controller.dart lib/pages/player/danmaku_source_sheet.dart lib/pages/player/player_item.dart lib/services/plugin/plugin_search_service.dart lib/services/video_source/media_work_index.dart lib/services/video_source/video_source_failure.dart lib/services/danmaku/media_danmaku_service.dart lib/services/danmaku/manual_danmaku_link_store.dart
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Build Android debug APK (verify only, no upload)
+        run: flutter build apk --debug
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+          cache: true
+      - name: Enable desktop and resolve dependencies
+        shell: pwsh
+        run: |
+          flutter config --enable-windows-desktop
+          flutter pub get
+      - name: Build Windows release directory (verify only, no upload)
+        shell: pwsh
+        run: flutter build windows --release
