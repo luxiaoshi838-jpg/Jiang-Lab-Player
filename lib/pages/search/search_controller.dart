@@ -157,7 +157,8 @@ abstract class _SearchPageController with Store {
       final batch = rules.skip(start).take(4).toList();
       final responses = await Future.wait(batch.map((rule) async {
         try {
-          return await rule.queryBangumi(keyword, shouldRethrow: true);
+          return await rule.queryBangumi(keyword, shouldRethrow: true)
+              .timeout(const Duration(seconds: 12));
         } catch (_) {
           return null; // A broken rule must not break the main search.
         }
