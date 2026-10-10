@@ -275,16 +275,15 @@ class BangumiApi {
     SearchDoubleRange? scoreRange,
     List<int> weekdays = const [],
   }) {
+    // Unranked dramas and variety titles must not disappear by default.
     final rankFilter = rankRange?.isValid == true
         ? _buildNumberFilter<int>(rankRange!.min, rankRange.max)
-        : (sort == 'rank')
-            ? [">0", "<=99999"]
-            : [">=0", "<=99999"];
+        : sort == 'rank' ? [">0", "<=99999"] : null;
 
     final filter = <String, dynamic>{
       "type": [2, 6],
-      "tag": tags,
-      "rank": rankFilter,
+      if (tags.isNotEmpty) "tag": tags,
+      if (rankFilter != null) "rank": rankFilter,
       "nsfw": false
     };
 
@@ -339,7 +338,10 @@ class BangumiApi {
         if (jsonItem is Map<String, dynamic>) {
           try {
             BangumiItem bangumiItem = BangumiItem.fromJson(jsonItem);
-            if (bangumiItem.nameCn != '') {
+            // Chinese-original subjects may have an empty name_cn.
+            if ((bangumiItem.type == 2 || bangumiItem.type == 6) &&
+                (bangumiItem.name.trim().isNotEmpty ||
+                 bangumiItem.nameCn.trim().isNotEmpty)) {
               bangumiList.add(bangumiItem);
             }
           } catch (e) {
