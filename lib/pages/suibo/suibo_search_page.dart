@@ -15,7 +15,7 @@ class SuiboSearchPage extends StatefulWidget {
 
 class _SuiboSearchPageState extends State<SuiboSearchPage> {
   final input = TextEditingController();
-  final PluginsController pluginsController = Modular.get<PluginsController>();
+  final PluginsController pluginsController = inject<PluginsController>();
   final Map<String, List<SearchItem>> results = {};
   final Map<String, String> errors = {};
   String keyword = '';
