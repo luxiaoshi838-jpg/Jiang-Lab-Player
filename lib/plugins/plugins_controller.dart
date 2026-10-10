@@ -119,6 +119,30 @@ abstract class _PluginsController with Store {
       await newPluginDirectory!.create(recursive: true);
     }
     await _loadAllPlugins();
+    await _migrateBundledPublicVideoRule();
+  }
+
+  /// One-time, non-destructive upgrade for installations whose existing
+  /// plugins.json predates the first public VOD source. Removal remains
+  /// user-controlled: the migration marker prevents re-adding a deleted rule.
+  Future<void> _migrateBundledPublicVideoRule() async {
+    final directory = newPluginDirectory;
+    if (directory == null) return;
+    final marker = File('${directory.path}/peertube_public_v1_migrated');
+    if (await marker.exists()) return;
+    try {
+      if (!pluginList.any((p) => p.name == 'PeerTube公开点播')) {
+        final raw = await rootBundle.loadString('assets/plugins/PeerTubePublic.json');
+        final source = Plugin.fromJson(
+          Map<String, dynamic>.from(jsonDecode(raw) as Map),
+        );
+        await updatePlugin(source);
+      }
+      await marker.writeAsString('v1\n', flush: true);
+    } catch (error) {
+      KazumiLogger().w('Plugin: bundled VOD rule migration unavailable',
+          error: error);
+    }
   }
 
   // Loads all plugins from the directory, populates the plugin list, and saves to plugins.json if needed
