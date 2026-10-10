@@ -42,7 +42,12 @@ class PublicVideoCatalog {
           .toString();
       final item = BangumiItem.fromRule(
           pluginName: sourceName, source: url, title: keyword.trim());
-      item.summary = '百科作品资料（不是播放链接），播放仍需可用来源规则';
+      // Extracts are the actual publicly available encyclopedia description.
+      // Do not mistake a catalog hit for a playable stream or invent a summary.
+      final extract = (raw['extract'] ?? '').toString().trim();
+      item.summary = extract.isNotEmpty
+          ? '$extract\n\n资料来源：维基百科'
+          : '暂无剧情简介，可通过下方视频平台搜索作品。';
       final image = raw['thumbnail'];
       if (image is Map && image['source'] is String) {
         final thumb = image['source'] as String;
@@ -62,9 +67,10 @@ class PublicVideoCatalog {
         'https://zh.wikipedia.org/w/api.php',
         queryParameters: <String, dynamic>{
           'action': 'query', 'format': 'json', 'formatversion': 2,
-          'redirects': '1', 'prop': 'categories|pageimages',
+          'redirects': '1', 'prop': 'categories|pageimages|extracts',
           'cllimit': 'max', 'piprop': 'thumbnail',
-          'pithumbsize': 300, 'titles': title,
+          'pithumbsize': 450, 'explaintext': '1', 'exintro': '1',
+          'exchars': 1500, 'titles': title,
         },
       ).timeout(const Duration(seconds: 8));
       final data = result.data;
