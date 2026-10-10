@@ -1,0 +1,105 @@
+name: Bootstrap and build 随播
+on:
+  push:
+    paths:
+      - ".github/workflows/bootstrap.yml"
+      - "scripts/prepare_suibo.py"
+      - "lib/pages/suibo/**"
+      - "README.md"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: suibo-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  import-source:
+    runs-on: ubuntu-latest
+    outputs:
+      revision: ${{ steps.import.outputs.revision }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Import GPL-3.0 upstream once, apply Suibo features
+        id: import
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f pubspec.yaml ]; then
+            git clone --depth 1 --branch main https://github.com/Predidit/Kazumi.git /tmp/suibo-upstream
+            printf "Imported Kazumi commit: " && git -C /tmp/suibo-upstream rev-parse HEAD
+            git -C /tmp/suibo-upstream submodule update --init --recursive
+            rsync -a /tmp/suibo-upstream/ ./ \
+              --exclude=.git --exclude=.github --exclude=README.md \
+              --exclude='scripts/prepare_suibo.py' --exclude='lib/pages/suibo'
+          fi
+          python3 scripts/prepare_suibo.py
+          git config user.name "suibo-source-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "feat: import Kazumi and implement 随播 Windows Android"
+            git push origin HEAD:main
+          fi
+          echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  android:
+    needs: import-source
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.import-source.outputs.revision }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+          cache: true
+      - name: Flutter dependencies
+        run: flutter pub get
+      - name: Build Android debug APK (not release-signed)
+        run: flutter build apk --debug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Suibo-Android-debug
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+
+  windows:
+    needs: import-source
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.import-source.outputs.revision }}
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+          cache: true
+      - name: Enable Windows and install dependencies
+        shell: pwsh
+        run: |
+          flutter config --enable-windows-desktop
+          flutter pub get
+      - name: Build Windows Release
+        shell: pwsh
+        run: flutter build windows --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Suibo-Windows-x64
+          path: build/windows/x64/runner/Release/**
+          if-no-files-found: error
