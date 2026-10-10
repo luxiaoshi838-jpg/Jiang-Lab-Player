@@ -47,7 +47,7 @@ abstract class _CollectController with Store {
       return;
     }
 
-    final bool syncSucceeded = bangumiItem.isExternal
+    final bool syncSucceeded = (bangumiItem.isExternal || bangumiItem.type != 2)
         ? true // Rule-only entries have no remote Bangumi ID.
         : await _syncBangumiCollectIfEnabled(bangumiItem.id, type);
     if (!syncSucceeded) {
@@ -68,7 +68,7 @@ abstract class _CollectController with Store {
 
   @action
   Future<void> deleteCollect(BangumiItem bangumiItem) async {
-    if (bangumiItem.isExternal) {
+    if (bangumiItem.isExternal || bangumiItem.type != 2) {
       await _deleteCollectLocally(bangumiItem);
       return;
     }
