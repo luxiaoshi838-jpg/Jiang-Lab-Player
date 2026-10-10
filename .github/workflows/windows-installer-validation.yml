@@ -1,0 +1,55 @@
+name: Windows installable EXE validation
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+          cache: true
+      - name: Install Inno Setup 6 if absent
+        shell: pwsh
+        run: |
+          $path = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $path) -and -not (Get-Command "ISCC.exe" -ErrorAction SilentlyContinue)) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "Inno Setup installation failed" }
+          }
+      - name: Build a complete private installer (no public upload)
+        shell: pwsh
+        run: |
+          $destination = Join-Path $env:RUNNER_TEMP "SuiboInstallerValidation"
+          & ./scripts/build_windows_installer.ps1 -OutputDirectory $destination
+          if ($LASTEXITCODE -ne 0) { throw "Windows installer build failed" }
+      - name: Test silent installation and same-identity overlay
+        shell: pwsh
+        run: |
+          $destination = Join-Path $env:RUNNER_TEMP "SuiboInstallerValidation"
+          $installer = @(Get-ChildItem $destination -Filter "Suibo-Setup-*-Windows-x64.exe")
+          if ($installer.Count -ne 1) { throw "Expected exactly one Windows installer" }
+          $installDir = Join-Path $env:RUNNER_TEMP "SuiboInstallerSmoke"
+          foreach ($attempt in 1..2) {
+            & $installer[0].FullName "/VERYSILENT" "/SUPPRESSMSGBOXES" "/NORESTART" "/DIR=$installDir"
+            if ($LASTEXITCODE -ne 0) { throw "Silent install/overlay attempt $attempt failed" }
+            foreach ($relative in @("suibo.exe", "flutter_windows.dll", "data\icudtl.dat")) {
+              if (-not (Test-Path (Join-Path $installDir $relative))) {
+                throw "Missing bundled dependency: $relative"
+              }
+            }
+            if (-not (Test-Path (Join-Path $installDir "data\flutter_assets"))) {
+              throw "Missing Flutter assets after install"
+            }
+          }
+          $uninstaller = Join-Path $installDir "unins000.exe"
+          if (Test-Path $uninstaller) {
+            & $uninstaller "/VERYSILENT" "/SUPPRESSMSGBOXES" "/NORESTART"
+            if ($LASTEXITCODE -ne 0) { throw "Silent uninstall failed" }
+          }
+      # DO NOT upload artifacts: this is a public source repository.
