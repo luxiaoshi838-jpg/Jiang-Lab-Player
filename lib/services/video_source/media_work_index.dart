@@ -9,11 +9,19 @@ class MediaWorkIndex {
       .toLowerCase()
       .replaceAll(RegExp(r'[\s·•:：.。!！?？《》〈〉【】\[\]（）(),，、]'), '');
 
-  /// Some rules append a bracketed release year to the same programme.
-  /// Keep the year for conflict checking; never drop season/episode suffixes.
-  static String normalizedWorkTitle(String title) => normalized(
-      title.replaceFirst(
-          RegExp(r'\\s*[（(](?:19|20)\\d{2}[）)]\\s*\
+  /// Remove only a final parenthesized production year.
+  /// Keep the year separately to prevent incorrect cross-edition merging.
+  static String normalizedWorkTitle(String title) {
+    final trimmed = title.trim();
+    final match = RegExp(r'[（(](?:19|20)[0-9][0-9][）)]')
+        .firstMatch(trimmed);
+    if (match != null && match.end == trimmed.length) {
+      return normalized(trimmed.substring(0, match.start));
+    }
+    return normalized(trimmed);
+  }
+
+  static String? yearOf(BangumiItem item) {
     if (item.airDate.length >= 4 &&
         RegExp(r'^(19|20)\d{2}$').hasMatch(item.airDate.substring(0, 4))) {
       return item.airDate.substring(0, 4);
