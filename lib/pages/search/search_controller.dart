@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:mobx/mobx.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
+import 'package:kazumi/modules/search/media_source_candidate.dart';
+import 'package:kazumi/services/video_source/media_work_index.dart';
 import 'package:kazumi/modules/collect/collect_type.dart';
 import 'package:kazumi/modules/search/image_search_module.dart';
 import 'package:kazumi/modules/search/search_history_module.dart';
@@ -130,53 +132,33 @@ abstract class _SearchPageController with Store {
       final existingIds = bangumiList.map((item) => item.id).toSet();
       final newItems =
           page.items.where((item) => existingIds.add(item.id)).toList();
-      if (newItems.isNotEmpty) {
-        bangumiList.addAll(newItems);
-        break;
+      for (final item in newItems) {
+        MediaWorkIndex.addMetadata(bangumiList, item);
       }
+      if (newItems.isNotEmpty) break;
     } while (hasMoreSearchResults && pagesFetched < _maxPagesPerSearch);
-    // Extend the original search grid using rule-provided titles for media
-    // not indexed in Bangumi. Filters are applied only to metadata results:
-    // a rule cannot reliably honour Bangumi tags, dates or ratings.
+    // Resolve metadata before merging rule hits, so a catalog/real Bangumi
+    // subject remains the single detail entry for each confidently matched
+    // title. Catalog providers are metadata only, never playable URLs.
     if (type != 'add' &&
         filterState.keyword.trim().isNotEmpty &&
         !filterState.hasAdvancedFilters) {
-      await _appendRuleResults(filterState.keyword.trim(), generation);
-    }
-    if (generation != _searchGeneration) return;
-    // Bangumi is not a complete index of documentaries, reality TV or VOD.
-    // The fallback is verified *metadata*, never an invented stream URL.
-    if (type != 'add' &&
-        filterState.keyword.trim().isNotEmpty &&
-        !filterState.hasAdvancedFilters &&
-        !bangumiList.any((item) =>
-            item.name.trim() == filterState.keyword.trim() ||
-            item.nameCn.trim() == filterState.keyword.trim())) {
-      final item = await PublicVideoCatalog.findExactVideo(
-          filterState.keyword.trim());
-      if (generation != _searchGeneration) return;
-      if (item != null &&
-          !bangumiList.any((existing) => existing.id == item.id)) {
-        bangumiList.add(item);
+      final title = filterState.keyword.trim();
+      final alreadyIndexed = bangumiList.any((item) =>
+          MediaWorkIndex.sameWork(item, title));
+      if (!alreadyIndexed) {
+        final wiki = await PublicVideoCatalog.findExactVideo(title);
+        if (generation != _searchGeneration) return;
+        if (wiki != null) MediaWorkIndex.addMetadata(bangumiList, wiki);
+        if (wiki == null) {
+          final tvmaze = await TvmazeCatalogService.search(title);
+          if (generation != _searchGeneration) return;
+          for (final show in tvmaze) {
+            MediaWorkIndex.addMetadata(bangumiList, show);
+          }
+        }
       }
-    }
-    // TVmaze is a second keyless metadata provider. It covers TV programmes
-    // missed by Bangumi/Wikipedia, but only exact-title matches are added.
-    // Video streams continue to come exclusively from installed rules.
-    if (type != 'add' &&
-        filterState.keyword.trim().isNotEmpty &&
-        !filterState.hasAdvancedFilters &&
-        !bangumiList.any((item) =>
-            TvmazeCatalogService.normalizeTitle(item.name) ==
-                TvmazeCatalogService.normalizeTitle(filterState.keyword) ||
-            TvmazeCatalogService.normalizeTitle(item.nameCn) ==
-                TvmazeCatalogService.normalizeTitle(filterState.keyword))) {
-      final extras = await TvmazeCatalogService.search(filterState.keyword);
-      if (generation != _searchGeneration) return;
-      final known = bangumiList.map((item) => item.id).toSet();
-      for (final item in extras) {
-        if (known.add(item.id)) bangumiList.add(item);
-      }
+      await _appendRuleResults(title, generation);
     }
     if (generation != _searchGeneration) return;
     isLoading = false;
@@ -187,13 +169,8 @@ abstract class _SearchPageController with Store {
     final rules = _pluginsController.pluginList
         .where((rule) => !isLiveOnlyRule(rule.type))
         .toList(growable: false);
-    // Avoid flooding many independent sites simultaneously.
-    final knownTitles = <String>{
-      for (final item in bangumiList)
-        (item.nameCn.isNotEmpty ? item.nameCn : item.name)
-            .trim().toLowerCase(),
-      for (final item in bangumiList) item.name.trim().toLowerCase(),
-    };
+    // Never deduplicate by title before retaining its rule URL: separate
+    // providers can legitimately serve the same work.
     for (var start = 0; start < rules.length; start += 4) {
       if (generation != _searchGeneration) return;
       final batch = rules.skip(start).take(4).toList();
@@ -212,12 +189,13 @@ abstract class _SearchPageController with Store {
         for (final result in response.data.take(30)) {
           final title = result.name.trim();
           if (title.isEmpty || result.src.trim().isEmpty ||
-              isKnownLivePage(result.src)) continue;
-          if (!knownTitles.add(title.toLowerCase())) continue;
-          bangumiList.add(BangumiItem.fromRule(
+              isKnownLivePage(result.src)) {
+            continue;
+          }
+          MediaWorkIndex.addRuleHit(bangumiList, MediaSourceCandidate(
             pluginName: batch[i].name,
-            source: result.src,
             title: title,
+            url: result.src,
           ));
         }
       }

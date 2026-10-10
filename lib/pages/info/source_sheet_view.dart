@@ -14,17 +14,19 @@ class _SourceSearchGroup {
   final List<SearchItem> results;
 
   bool get isSearching => status == PluginSearchStatus.pending;
-  bool get hasResults =>
-      status == PluginSearchStatus.success && results.isNotEmpty;
+  bool get hasResults => results.isNotEmpty;
 
-  String get statusLabel => switch (status) {
+  String get statusLabel {
+    if (results.isNotEmpty) return '${results.length} 个结果';
+    return switch (status) {
         PluginSearchStatus.pending => '检索中…',
         PluginSearchStatus.success =>
           results.isEmpty ? '无结果' : '${results.length} 个结果',
         PluginSearchStatus.noResult => '无结果',
         PluginSearchStatus.error => '检索失败',
         PluginSearchStatus.captcha => '需要验证',
-      };
+    };
+  }
 }
 
 enum _SourceDisplay { preview, expanded, collapsed }

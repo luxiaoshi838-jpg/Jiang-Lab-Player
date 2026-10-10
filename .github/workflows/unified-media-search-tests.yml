@@ -1,0 +1,27 @@
+name: Unified media search regression
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unified-media-search-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unified-media:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Search, collection and source regression tests
+        run: flutter test test/services/video_source/media_work_index_test.dart test/suibo_unified_media_test.dart test/public_video_catalog_test.dart test/tvmaze_catalog_test.dart test/collect_sync_test.dart
+      - name: Analyze changed search and source files
+        run: flutter analyze lib/services/video_source/media_work_index.dart lib/modules/search/media_source_candidate.dart lib/modules/bangumi/bangumi_item.dart lib/pages/search/search_controller.dart lib/pages/info/source_sheet.dart lib/pages/info/source_sheet_view.dart test/services/video_source/media_work_index_test.dart

@@ -1,5 +1,6 @@
 import 'package:hive_ce/hive.dart';
 import 'package:kazumi/modules/bangumi/bangumi_tag.dart';
+import 'package:kazumi/modules/search/media_source_candidate.dart';
 import 'package:kazumi/utils/date_time.dart';
 import 'bangumi_interest.dart';
 
@@ -45,6 +46,10 @@ class BangumiItem {
   String sourceUrl;
 
   bool get isExternal => sourcePlugin.isNotEmpty && sourceUrl.isNotEmpty;
+
+  /// Search-session-only rule hits. Not stored in Hive; bookmarks continue to
+  /// use the original stable Bangumi or single-rule identity.
+  final List<MediaSourceCandidate> discoveredSources = [];
 
   // Calendar metadata is separate from counted user tags and is not persisted.
   final List<String> metaTags;
