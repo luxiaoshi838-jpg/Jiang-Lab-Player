@@ -36,7 +36,7 @@ class TvmazeCatalogService {
         title: title,
       );
       final summary = (show['summary'] ?? '').toString();
-      final description = html_parser.parseFragment(summary).text.trim();
+      final description = (html_parser.parseFragment(summary).text ?? '').trim();
       item.summary = description.isNotEmpty
           ? '$description\n资料：TVmaze（非视频播放源）'
           : '节目资料由 TVmaze 提供（非视频播放源）';
