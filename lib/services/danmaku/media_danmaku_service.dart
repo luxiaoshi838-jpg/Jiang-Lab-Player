@@ -266,7 +266,9 @@ class MediaDanmakuService {
       final mode = int.tryParse(parts[1]);
       final rgb = int.tryParse(parts[3]);
       if (time == null || !time.isFinite || time < 0 ||
-          mode == null || rgb == null) continue;
+          mode == null || rgb == null) {
+        continue;
+      }
       // Do not run unsupported advanced or reverse modes as ordinary text.
       if (mode != 1 && mode != 4 && mode != 5) continue;
       final message = element.text.trim();
