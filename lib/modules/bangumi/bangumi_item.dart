@@ -137,15 +137,16 @@ class BangumiItem {
     }
 
     List<int> parseBangumiVoteCount(Map<String, dynamic> jsonData) {
-      if (!jsonData.containsKey('rating')) {
-        return [];
-      }
-      final json = jsonData['rating']['count'];
+      final rating = jsonData['rating'];
+      if (rating is! Map) return [];
+      final json = rating['count'];
       if (json is Map<String, dynamic>) {
-        return List<int>.generate(10, (i) => json['${i + 1}'] as int);
+        return List<int>.generate(
+          10, (i) => (json['${i + 1}'] as num?)?.toInt() ?? 0,
+        );
       }
       if (json is List<dynamic>) {
-        return json.map((e) => e as int).toList();
+        return json.map((e) => (e as num?)?.toInt() ?? 0).toList();
       }
       return [];
     }
@@ -168,6 +169,19 @@ class BangumiItem {
     }
 
     final String airDateStr = resolveAirDateString(json);
+    final rawRating = json['rating'];
+    final rating = rawRating is Map ? rawRating : const <String, dynamic>{};
+    final rawImages = json['images'];
+    final images = <String, String>{};
+    if (rawImages is Map) {
+      for (final entry in rawImages.entries) {
+        if (entry.key is String && entry.value is String) {
+          images[entry.key as String] = entry.value as String;
+        }
+      }
+    } else if (json['image'] is String) {
+      images['large'] = json['image'] as String;
+    }
 
     final rawTags = json['tags'] as List? ?? [];
     final tagList = rawTags.map((tag) => BangumiTag.fromJson(tag)).toList();
@@ -191,22 +205,14 @@ class BangumiItem {
       airDate: airDateStr,
       airWeekday:
           dateStringToWeekday(airDateStr.isEmpty ? '2000-11-11' : airDateStr),
-      rank: json['rating']['rank'] ?? 0,
-      images: Map<String, String>.from(
-        json['images'] ??
-            {
-              "large": json['image'],
-              "common": "",
-              "medium": "",
-              "small": "",
-              "grid": ""
-            },
-      ),
+      rank: (rating['rank'] as num?)?.toInt() ?? 0,
+      images: images,
       tags: tagList,
       alias: parseBangumiAliases(json),
-      ratingScore: double.parse(
-          (json['rating']['score'] ?? 0.0).toDouble().toStringAsFixed(1)),
-      votes: json['rating']['total'] ?? 0,
+      ratingScore:
+          double.parse(((rating['score'] as num?)?.toDouble() ?? 0)
+              .toStringAsFixed(1)),
+      votes: (rating['total'] as num?)?.toInt() ?? 0,
       votesCount: parseBangumiVoteCount(json),
       info: json['info'] ?? '',
       metaTags: rawMetaTags is List
