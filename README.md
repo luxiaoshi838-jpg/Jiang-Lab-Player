@@ -9,7 +9,7 @@ Windows PC 与 Android **通用视频播放器**（基于 [Kazumi](https://githu
 - 弹幕：**完整保留原 Kazumi 的自动匹配弹幕、手动查找及切换弹幕源、弹幕屏蔽与设置**。原有番剧的 Bangumi ID 保持不变；未收录于弹幕来源的作品不强制生成弹幕。
 - 点播视频直链：规则返回明确的 HTTP(S) MP4/M4V/M3U8 地址时可作为单集交给原播放器；M3U8 同样用于点播，不能等同于直播。明显的直播专用规则和已知直播房间地址不进入扩展搜索。
 - Android 应用 ID：`com.jianglab.suibo`（与 Kazumi 分开安装）。
-- Android 正式签名：私钥、密码仅在私有 Google Drive 的“签名文件”文件夹保管，不进入公开仓库。
+- Android 正式签名：私钥、密码仅在受控私有存储中保管，不进入公开仓库。\n- **程序分发**：公开 GitHub 仓库只保存源码、配置、文档和构建验证日志；Android APK、Windows EXE/完整运行目录不得作为 GitHub Release 附件、Actions Artifacts 或 Git 提交公开上传。已存在的历史 Actions Artifacts 应由管理员在 GitHub Actions 后台删除。
 
 ## 功能与界面原则
 
@@ -28,7 +28,7 @@ Windows PC 与 Android **通用视频播放器**（基于 [Kazumi](https://githu
 
 ## 签名安全
 
-绝不提交 `*.jks`、`*.keystore`、`key.properties`、签名密码或发布令牌。无签名凭据时 Android CI 仅生成 debug APK；正式 release APK 须在受控环境传入签名凭据进行构建。
+绝不提交 `*.jks`、`*.keystore`、`key.properties`、签名密码或发布令牌。公开 GitHub CI 仅验证 Android debug 和 Windows Release **能否构建，不上传二进制产物**；正式 Android release APK 须在受控环境传入签名凭据私有构建并私下交付。
 
 ## 授权
 
