@@ -13,6 +13,9 @@ import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/services/storage/storage.dart';
 import 'package:kazumi/services/video_source/services.dart';
 import 'package:kazumi/request/apis/danmaku_api.dart';
+import 'package:kazumi/services/danmaku/media_danmaku_service.dart';
+import 'package:kazumi/services/video_source/direct_video_source.dart';
+import 'package:kazumi/services/video_source/video_source_format.dart';
 import 'package:mobx/mobx.dart';
 
 part 'download_controller.g.dart';
@@ -576,12 +579,18 @@ abstract class _DownloadController with Store {
         if (lease.isCancelled) {
           throw const VideoSourceCancelledException();
         }
-        final source = await lease.resolve(
-          fullUrl,
-          useLegacyParser: plugin.useLegacyParser,
-          timeout: const Duration(seconds: 30),
-        );
-        m3u8Url = source.url;
+        if (directVideoFormat(fullUrl) == VideoSourceFormat.hls) {
+          // VOD HLS is already a playable playlist, not a web page.
+          // Keep the existing download manager and its resume behavior.
+          m3u8Url = fullUrl;
+        } else {
+          final source = await lease.resolve(
+            fullUrl,
+            useLegacyParser: plugin.useLegacyParser,
+            timeout: const Duration(seconds: 30),
+          );
+          m3u8Url = source.url;
+        }
       } on VideoSourceTimeoutException {
         if (lease.isCancelled) {
           wasCancelled = true;
@@ -706,22 +715,39 @@ abstract class _DownloadController with Store {
         KazumiLogger().i(
             'DownloadController: fetching danmaku for episode $episodeNumber (async)');
 
-        // 获取 DanDan 番剧 ID
-        final danDanBangumiID =
-            await DanmakuApi.getDanDanBangumiIDByBgmBangumiID(bangumiId);
-        if (danDanBangumiID == 0) {
-          KazumiLogger().w(
-              'DownloadController: failed to get DanDan bangumiID for $bangumiId');
-          return;
-        }
-
-        // 获取弹幕列表
-        final danmakus =
-            await DanmakuApi.getDanDanmaku(danDanBangumiID, episodeNumber);
-        if (danmakus.isEmpty) {
-          KazumiLogger().i(
-              'DownloadController: no danmaku found for episode $episodeNumber');
-          return;
+        int danDanBangumiID = 0;
+        List<DanmakuEntry> danmakus;
+        // Rule-only video IDs occupy the high unsigned 32-bit range.
+        // They are not real Bangumi IDs, and must never be sent to its
+        // mapping endpoint. Fetch native VOD danmaku or exact-title match.
+        if (bangumiId >= 0x80000000) {
+          final record = _repository.getRecord(recordKey);
+          final episode = record?.episodes[episodeNumber];
+          if (record == null || episode == null) return;
+          final matched = await MediaDanmakuService.match(
+            title: record.bangumiName,
+            episode: episodeNumber,
+            pageUrls: [episode.episodePageUrl],
+          );
+          if (matched == null || matched.entries.isEmpty) return;
+          danDanBangumiID = matched.dandanId;
+          danmakus = matched.entries;
+        } else {
+          // Unmodified original mapping for genuine Bangumi subjects.
+          danDanBangumiID =
+              await DanmakuApi.getDanDanBangumiIDByBgmBangumiID(bangumiId);
+          if (danDanBangumiID == 0) {
+            KazumiLogger().w(
+                'DownloadController: failed to get DanDan bangumiID for $bangumiId');
+            return;
+          }
+          danmakus =
+              await DanmakuApi.getDanDanmaku(danDanBangumiID, episodeNumber);
+          if (danmakus.isEmpty) {
+            KazumiLogger().i(
+                'DownloadController: no danmaku found for episode $episodeNumber');
+            return;
+          }
         }
 
         // 等待 downloadDirectory 就绪（下载管理器处理任务后才设置）
