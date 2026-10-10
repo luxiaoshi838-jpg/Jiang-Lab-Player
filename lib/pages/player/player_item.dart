@@ -1239,6 +1239,9 @@ class _PlayerItemState extends State<PlayerItem>
     unawaited(showDanmakuSourceSheet(
       context,
       bangumiId: videoPageController.bangumiItem.id,
+      episodeNumber: playerController.currentDanmakuEpisodeNumber,
+      rememberSelection: videoPageController.bangumiItem.isExternal ||
+          videoPageController.bangumiItem.type != 2,
       initialKeyword: videoPageController.title,
       danmakuController: playerController.danmaku,
       onBeforeApply: videoPageController.cancelAutomaticDanmakuLoad,
