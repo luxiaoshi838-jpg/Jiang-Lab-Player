@@ -41,6 +41,7 @@ class _SourceSheetView extends StatefulWidget {
     required this.onRetry,
     required this.onVerify,
     required this.onOpenBrowser,
+    required this.onOpenOfficialPlatform,
     required this.onPlay,
     required this.onClose,
   });
@@ -53,6 +54,7 @@ class _SourceSheetView extends StatefulWidget {
   final ValueChanged<String> onRetry;
   final ValueChanged<String> onVerify;
   final ValueChanged<String> onOpenBrowser;
+  final ValueChanged<OfficialVideoPlatform> onOpenOfficialPlatform;
   final void Function(String sourceName, SearchItem result) onPlay;
   final VoidCallback onClose;
 
@@ -144,6 +146,38 @@ class _SourceSheetViewState extends State<_SourceSheetView> {
               child: CustomScrollView(
                 controller: _scrollController,
                 slivers: [
+                  if (pending == 0 && resultCount == 0)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '已安装的播放规则没有返回可用剧集。番剧来源不一定收录电视剧、电影，部分站点也可能失效。',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                            const SizedBox(height: 12),
+                            Text('前往正版平台搜索（网站观看，非内置播放结果）',
+                                style: Theme.of(context).textTheme.bodySmall),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                for (final platform in OfficialVideoPlatform.values)
+                                  OutlinedButton.icon(
+                                    onPressed: () =>
+                                        widget.onOpenOfficialPlatform(platform),
+                                    icon: const Icon(Icons.open_in_new, size: 16),
+                                    label: Text(OfficialVideoSearch.label(platform)),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   if (widget.groups.isEmpty)
                     const SliverToBoxAdapter(
                       child: GeneralEmptyState(
