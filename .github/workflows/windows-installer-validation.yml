@@ -71,7 +71,14 @@ jobs:
           }
           $uninstaller = Join-Path $installDir "unins000.exe"
           if (Test-Path $uninstaller) {
-            & $uninstaller "/VERYSILENT" "/SUPPRESSMSGBOXES" "/NORESTART"
-            if ($LASTEXITCODE -ne 0) { throw "Silent uninstall failed" }
+            $uninstallLog = Join-Path $env:RUNNER_TEMP "Suibo-Uninstall.log"
+            $process = Start-Process -FilePath $uninstaller -ArgumentList @(
+              "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=$uninstallLog"
+            ) -Wait -PassThru
+            if ($process.ExitCode -ne 0) {
+              Write-Host "Uninstaller exit code: $($process.ExitCode)"
+              if (Test-Path $uninstallLog) { Get-Content $uninstallLog -Tail 65 }
+              throw "Silent uninstall failed"
+            }
           }
       # DO NOT upload artifacts: this is a public source repository.
