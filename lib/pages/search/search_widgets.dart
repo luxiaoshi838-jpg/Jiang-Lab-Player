@@ -213,7 +213,7 @@ class _SearchLoadingState extends StatelessWidget {
           const SizedBox(height: 20),
           Semantics(
               liveRegion: true,
-              child: Text('正在搜索番剧',
+              child: Text('正在搜索作品',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.titleMedium)),
         ]));
