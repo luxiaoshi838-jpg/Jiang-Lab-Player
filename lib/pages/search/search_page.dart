@@ -311,10 +311,12 @@ class _SearchPageState extends State<SearchPage> {
       if (busy && allItems.isEmpty)
         const SliverToBoxAdapter(child: _SearchLoadingState())
       else if (allItems.isEmpty)
-        const SliverToBoxAdapter(
+        SliverToBoxAdapter(
           child: GeneralEmptyState(
             icon: Icons.search_off_rounded,
-            title: '没有找到作品',
+            title: _controller.installedVideoRuleCount == 0
+                 ? '没有找到作品 · 请先在规则管理添加视频来源'
+                 : '没有找到作品 · 当前来源可能不收录该视频',
           ),
         )
       else if (items.isEmpty)

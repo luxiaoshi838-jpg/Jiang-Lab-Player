@@ -12,6 +12,7 @@ import 'package:kazumi/request/apis/trace_api.dart';
 import 'package:kazumi/plugins/plugins_controller.dart';
 import 'package:kazumi/utils/search_parser.dart';
 import 'package:kazumi/services/video_source/video_catalog_scope.dart';
+import 'package:kazumi/services/video_source/public_video_catalog.dart';
 
 part 'search_controller.g.dart';
 
@@ -35,6 +36,9 @@ abstract class _SearchPageController with Store {
   int _searchGeneration = 0;
 
   bool hasMoreSearchResults = true;
+
+  int get installedVideoRuleCount => _pluginsController.pluginList
+      .where((p) => !isLiveOnlyRule(p.type)).length;
 
   @observable
   bool isLoading = false;
@@ -139,9 +143,25 @@ abstract class _SearchPageController with Store {
       await _appendRuleResults(filterState.keyword.trim(), generation);
     }
     if (generation != _searchGeneration) return;
+    // Bangumi is not a complete index of documentaries, reality TV or VOD.
+    // The fallback is verified *metadata*, never an invented stream URL.
+    if (type != 'add' &&
+        filterState.keyword.trim().isNotEmpty &&
+        !filterState.hasAdvancedFilters &&
+        !bangumiList.any((item) =>
+            item.name.trim() == filterState.keyword.trim() ||
+            item.nameCn.trim() == filterState.keyword.trim())) {
+      final item = await PublicVideoCatalog.findExactVideo(
+          filterState.keyword.trim());
+      if (generation != _searchGeneration) return;
+      if (item != null &&
+          !bangumiList.any((existing) => existing.id == item.id)) {
+        bangumiList.add(item);
+      }
+    }
+    if (generation != _searchGeneration) return;
     isLoading = false;
-    isTimeOut =
-        bangumiList.isEmpty && (pagesFetched == 0 || !hasMoreSearchResults);
+    isTimeOut = bangumiList.isEmpty;
   }
 
   Future<void> _appendRuleResults(String keyword, int generation) async {

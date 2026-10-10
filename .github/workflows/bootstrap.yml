@@ -65,7 +65,7 @@ jobs:
       - name: Flutter dependencies
         run: flutter pub get
       - name: Verify unified search and collection regression tests
-        run: flutter test test/suibo_unified_media_test.dart test/bangumi_search_params_test.dart test/collect_sync_test.dart
+        run: flutter test test/suibo_unified_media_test.dart test/bangumi_search_params_test.dart test/public_video_catalog_test.dart test/collect_sync_test.dart
       - name: Build Android debug APK (not release-signed)
         run: flutter build apk --debug
 
