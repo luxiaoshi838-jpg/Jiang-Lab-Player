@@ -3,6 +3,7 @@ import 'package:kazumi/pages/info/info_controller.dart';
 import 'package:kazumi/plugins/plugins.dart';
 import 'package:kazumi/plugins/plugins_controller.dart';
 import 'package:kazumi/services/logging/logger.dart';
+import 'package:kazumi/request/core/network_exception.dart';
 import 'package:kazumi/services/plugin/rule_engine_models.dart';
 import 'package:kazumi/utils/async_session.dart';
 
@@ -27,6 +28,7 @@ class PluginSearchService {
         infoController.pluginSearchResponseList.removeWhere(
           (response) => response.pluginName == pluginName,
         );
+        infoController.pluginSearchFailureHints.remove(pluginName);
         infoController.pluginSearchStatus[pluginName] =
             PluginSearchStatus.pending;
         await _queryPlugin(plugin, keyword);
@@ -59,6 +61,7 @@ class PluginSearchService {
   Future<void> queryAllSource(String keyword) async {
     infoController.pluginSearchResponseList.clear();
     infoController.pluginSearchStatus.clear();
+    infoController.pluginSearchFailureHints.clear();
 
     final plugins = List<Plugin>.of(pluginsController.pluginList);
     for (final plugin in plugins) {
@@ -86,6 +89,7 @@ class PluginSearchService {
         cancelToken: _cancelToken,
       );
       if (_isCancelled || session.isStale) return;
+      infoController.pluginSearchFailureHints.remove(plugin.name);
       infoController.pluginSearchStatus[plugin.name] =
           PluginSearchStatus.success;
       if (result.data.isNotEmpty) {
@@ -116,7 +120,9 @@ class PluginSearchService {
       return;
     }
     final name = error is SearchErrorException ? error.pluginName : plugin.name;
-    KazumiLogger().w('PluginSearchService: search error for $name');
+    KazumiLogger().w('PluginSearchService: search error for $name',
+        error: error);
+    infoController.pluginSearchFailureHints[name] = sourceSearchFailureHint(error);
     infoController.pluginSearchStatus[name] = PluginSearchStatus.error;
   }
 
@@ -124,4 +130,29 @@ class PluginSearchService {
     _isCancelled = true;
     _cancelToken.cancel();
   }
+}
+
+/// Safe, actionable diagnostics: no requested URLs, access tokens or cookies.
+String sourceSearchFailureHint(Object error) {
+  final cause = error is SearchErrorException ? error.cause : error;
+  if (cause is NetworkException) {
+    if (cause.statusCode == 403 || cause.statusCode == 401) {
+      return '网站拒绝访问，可能需要登录或验证';
+    }
+    if (cause.statusCode == 404) return '网站搜索地址已失效，需更新规则';
+    if (cause.statusCode == 429) return '网站限制请求频率，请稍后重试';
+    switch (cause.type) {
+      case NetworkExceptionType.connectionTimeout:
+      case NetworkExceptionType.receiveTimeout:
+      case NetworkExceptionType.sendTimeout:
+        return '网站响应超时，请检查网络或稍后重试';
+      case NetworkExceptionType.connectionError:
+        return '连接失败，可能是网络、域名或网站故障';
+      case NetworkExceptionType.parseError:
+        return '网站页面格式已变化，需更新来源规则';
+      default:
+        return '网站请求失败，请检查规则及网站状态';
+    }
+  }
+  return '解析或检索失败，请检查规则更新或尝试其他来源';
 }
