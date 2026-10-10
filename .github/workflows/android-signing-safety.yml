@@ -24,23 +24,23 @@ jobs:
         run: python3 scripts/private_android_release.py --help
       - name: Flutter dependencies
         run: flutter pub get
+      - name: Confirm Android debug still builds
+        run: flutter build apk --debug
       - name: Fail closed if release key is absent
         shell: bash
         run: |
           set +e
-          (cd android && ./gradlew :app:preReleaseBuild --console=plain > ../signing-guard-output.log 2>&1)
+          flutter build apk --release > signing-guard-output.log 2>&1
           status=$?
           set -e
           if [ "$status" -eq 0 ]; then
-            echo "ERROR: release preparation accepted missing signing credentials"
+            echo "ERROR: release build accepted missing signing credentials"
             exit 1
           fi
           if ! grep -q "Private Android release signing is required" signing-guard-output.log; then
-            echo "ERROR: release preparation failed for another reason"
+            echo "ERROR: release build failed for another reason"
             tail -n 35 signing-guard-output.log
             exit 1
           fi
           rm -f signing-guard-output.log
-      - name: Confirm Android debug still builds
-        run: flutter build apk --debug
       # No upload-artifact, release attachment, or private keys.
