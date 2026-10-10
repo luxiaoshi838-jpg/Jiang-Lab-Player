@@ -22,21 +22,6 @@ def main():
          'applicationId "com.predidit.kazumi"',
          'applicationId "com.jianglab.suibo"')
     edit("lib/main.dart", "title: 'Kazumi',", "title: '随播',", required=False)
-    edit("lib/pages/index_module.dart",
-         "import 'package:kazumi/pages/index_page.dart';",
-         "import 'package:kazumi/pages/index_page.dart';\nimport 'package:kazumi/pages/suibo/suibo_search_page.dart';")
-    edit("lib/pages/index_module.dart",
-         "..module(myModule);",
-         "..module(myModule)\n            ..route('/suibo', child: (context, state) => const SuiboSearchPage());")
-    edit("lib/pages/router.dart",
-         "MenuRouteItem(path: '/popular'),",
-         "MenuRouteItem(path: '/popular'),\n  MenuRouteItem(path: '/suibo'),")
-    edit("lib/pages/menu/menu.dart",
-         "label: '推荐',\n          ),\n          NavigationDestination(",
-         "label: '推荐',\n          ),\n          NavigationDestination(\n            selectedIcon: Icon(Icons.movie),\n            icon: Icon(Icons.movie_outlined),\n            label: '影视',\n          ),\n          NavigationDestination(")
-    edit("lib/pages/menu/menu.dart",
-         "label: Text('推荐'),\n                ),\n                NavigationRailDestination(",
-         "label: Text('推荐'),\n                ),\n                NavigationRailDestination(\n                  selectedIcon: Icon(Icons.movie),\n                  icon: Icon(Icons.movie_outlined),\n                  label: Text('影视'),\n                ),\n                NavigationRailDestination(")
     edit("windows/runner/Runner.rc",
          'VALUE "ProductName", "kazumi" "\\0"',
          'VALUE "ProductName", "随播" "\\0"', required=False)
@@ -83,7 +68,7 @@ if (suiboKeyFile.exists()) {
     ignore = ROOT / ".gitignore"
     with ignore.open("a", encoding="utf-8") as f:
         f.write("\n# 随播私有签名资料（禁止上传）\n*.jks\n*.keystore\nkey.properties\n**/key.properties\n")
-    print("SU IBO PATCH OK: Android, Windows, rule-based global search.")
+    print("SUIBO PATCH OK: Android and Windows branding (original layout unchanged).")
 
 if __name__ == "__main__":
     main()
