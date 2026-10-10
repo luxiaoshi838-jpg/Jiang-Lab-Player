@@ -136,7 +136,12 @@ abstract class _PluginsController with Store {
         final source = Plugin.fromJson(
           Map<String, dynamic>.from(jsonDecode(raw) as Map),
         );
-        await updatePlugin(source);
+        // Show the new VOD source before the existing anime-only rules,
+        // without changing their relative order or overwriting user rules.
+        await _mutateAndPersist(
+          () => pluginList.insert(0, source),
+          errorMessage: 'Plugin: failed to add bundled VOD source',
+        );
       }
       await marker.writeAsString('v1\n', flush: true);
     } catch (error) {
