@@ -546,6 +546,15 @@ abstract class _VideoPageController with Store implements Disposable {
   ) async {
     final danmakuSession = _danmakuSessions.begin();
     playerController.danmaku.beginDanmakuLoad();
+    // Rule-only videos have a local collection ID, not a Bangumi subject ID.
+    // Sending that ID to DanDanPlay causes a false auto-match request and an
+    // error toast. Keep original manual danmaku source selection available.
+    if (bangumiItem.isExternal) {
+      if (session.isActive && danmakuSession.isActive) {
+        playerController.danmaku.finishDanmakuLoad(disableDanmaku: true);
+      }
+      return;
+    }
     try {
       final result = await playerController.danmaku.fetchDanmaku(
         params.bangumiId,

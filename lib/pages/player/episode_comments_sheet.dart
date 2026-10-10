@@ -61,8 +61,10 @@ class _EpisodeCommentsSheetState extends State<EpisodeCommentsSheet>
     final version = ++_requestVersion;
     _selectedEpisode = widget.episode;
     _hasError = false;
-    _isLoading = _controller.commentsEpisode != _selectedEpisode ||
-        _controller.episodeCommentsList.isEmpty;
+    // A rule-only video has no real Bangumi episode/comment endpoints.
+    _isLoading = !_controller.bangumiItem.isExternal &&
+        (_controller.commentsEpisode != _selectedEpisode ||
+            _controller.episodeCommentsList.isEmpty);
     if (_isLoading) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && version == _requestVersion) {
@@ -74,6 +76,15 @@ class _EpisodeCommentsSheetState extends State<EpisodeCommentsSheet>
 
   Future<void> _loadComments() async {
     final version = ++_requestVersion;
+    if (_controller.bangumiItem.isExternal) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _hasError = false;
+        });
+      }
+      return;
+    }
     setState(() {
       _isLoading = true;
       _hasError = false;
@@ -107,6 +118,10 @@ class _EpisodeCommentsSheetState extends State<EpisodeCommentsSheet>
   }
 
   Future<void> _showEpisodeSelection() async {
+    if (_controller.bangumiItem.isExternal) {
+      KazumiDialog.showToast(message: '该视频暂无 Bangumi 分集讨论');
+      return;
+    }
     if (dialogs.isRunning) return;
     final controller = _controller;
     await dialogs.run((task) async {

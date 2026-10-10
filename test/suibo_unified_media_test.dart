@@ -105,6 +105,8 @@ void main() {
     expect(movie.sourcePlugin, 'demo-rule');
     expect(movie.sourceUrl, 'https://example.org/movie/1');
     expect(movie.nameCn, '示例电影');
+    // Synthetic ID is never a valid Bangumi/DanDanPlay automatic-match ID.
+    expect(movie.isExternal, isTrue);
   });
 
   test('rule-only items stay on local/WebDAV shelf, not Bangumi upload', () {
