@@ -61,3 +61,9 @@ android/build/reports/problems/
 *.keystore
 key.properties
 **/key.properties
+
+# 随播私有签名资料（禁止上传）
+*.jks
+*.keystore
+key.properties
+**/key.properties
