@@ -65,9 +65,13 @@ class PluginSearchService {
       infoController.pluginSearchStatus[plugin.name] =
           PluginSearchStatus.pending;
     }
-    await Future.wait(
-      plugins.map((plugin) => _queryPlugin(plugin, keyword)),
-    );
+    // Bound concurrent site requests to reduce throttling and captchas.
+    for (var start = 0; start < plugins.length; start += 4) {
+      if (_isCancelled) return;
+      await Future.wait(
+        plugins.skip(start).take(4).map((plugin) => _queryPlugin(plugin, keyword)),
+      );
+    }
   }
 
   Future<void> _queryPlugin(Plugin plugin, String keyword) async {
