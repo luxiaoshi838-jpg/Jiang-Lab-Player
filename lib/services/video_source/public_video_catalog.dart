@@ -23,11 +23,15 @@ class PublicVideoCatalog {
     if (query is! Map || query['pages'] is! List) return null;
     for (final raw in query['pages'] as List) {
       if (raw is! Map || raw['missing'] == true ||
-          raw['ns'] != 0 || raw['pageid'] is! int) continue;
+          raw['ns'] != 0 || raw['pageid'] is! int) {
+        continue;
+      }
       final cats = raw['categories'];
       if (cats is! List ||
           !isVideoCategory(cats.whereType<Map>().map(
-              (c) => c['title']?.toString() ?? ''))) continue;
+              (c) => c['title']?.toString() ?? ''))) {
+        continue;
+      }
       final title = raw['title']?.toString().trim() ?? '';
       if (title.isEmpty) continue;
       final requested = keyword.trim().replaceAll(' ', '').toLowerCase();
@@ -38,7 +42,7 @@ class PublicVideoCatalog {
           r['from']?.toString().replaceAll(' ', '').toLowerCase() == requested);
       if (requested != canonical && !alias) continue;
       final url = Uri.https(
-          'zh.wikipedia.org', '/wiki/' + title.replaceAll(' ', '_'))
+          'zh.wikipedia.org', '/wiki/${title.replaceAll(' ', '_')}')
           .toString();
       final item = BangumiItem.fromRule(
           pluginName: sourceName, source: url, title: keyword.trim());
