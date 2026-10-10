@@ -12,6 +12,8 @@ import 'package:kazumi/repositories/download_repository.dart';
 import 'package:kazumi/services/download/download_manager.dart';
 import 'package:kazumi/services/video_source/services.dart';
 import 'package:kazumi/services/video_source/direct_video_source.dart';
+import 'package:kazumi/services/danmaku/media_danmaku_service.dart';
+import 'package:kazumi/pages/player/controller/player_danmaku_controller.dart';
 import 'package:kazumi/bean/dialog/dialog_helper.dart';
 import 'package:mobx/mobx.dart';
 import 'package:kazumi/services/logging/logger.dart';
@@ -546,21 +548,31 @@ abstract class _VideoPageController with Store implements Disposable {
   ) async {
     final danmakuSession = _danmakuSessions.begin();
     playerController.danmaku.beginDanmakuLoad();
-    // Rule-only videos have a local collection ID, not a Bangumi subject ID.
-    // Sending that ID to DanDanPlay causes a false auto-match request and an
-    // error toast. Keep original manual danmaku source selection available.
-    if (bangumiItem.isExternal) {
-      if (session.isActive && danmakuSession.isActive) {
-        playerController.danmaku.finishDanmakuLoad(disableDanmaku: true);
-      }
-      return;
-    }
+    // Real Bangumi anime IDs still use Kazumi's original auto matching.
+    // Rule-only videos have synthetic IDs; use the actual VOD URL or a strict
+    // programme/episode match instead of sending fake IDs to DanDanPlay.
+    final external = bangumiItem.isExternal || bangumiItem.type != 2;
     try {
-      final result = await playerController.danmaku.fetchDanmaku(
-        params.bangumiId,
-        params.pluginName,
-        params.danmakuEpisodeNumber,
-      );
+      final DanmakuLoadResult result;
+      if (external) {
+        final matched = await MediaDanmakuService.match(
+          title: bangumiItem.nameCn.isNotEmpty
+              ? bangumiItem.nameCn
+              : bangumiItem.name,
+          episode: params.danmakuEpisodeNumber,
+          pageUrls: [params.pageUrl, src, bangumiItem.sourceUrl],
+        );
+        result = DanmakuLoadResult.success(
+          danmakus: matched?.entries ?? const [],
+          bangumiID: matched?.dandanId ?? 0,
+        );
+      } else {
+        result = await playerController.danmaku.fetchDanmaku(
+          params.bangumiId,
+          params.pluginName,
+          params.danmakuEpisodeNumber,
+        );
+      }
       if (session.isActive && danmakuSession.isActive) {
         if (result.hasDanmakus) {
           final bool enableDanmaku =
@@ -571,7 +583,7 @@ abstract class _VideoPageController with Store implements Disposable {
           );
         } else {
           playerController.danmaku.applyUnavailableDanmakuLoad(result);
-          if (result.isFailed) {
+          if (result.isFailed && !external) {
             KazumiDialog.showToast(message: '弹幕加载失败，可手动检索');
           }
         }

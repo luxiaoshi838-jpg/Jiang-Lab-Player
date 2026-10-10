@@ -1,4 +1,5 @@
 import 'package:kazumi/services/video_source/video_source_format.dart';
+import 'package:kazumi/services/video_source/video_catalog_scope.dart';
 
 /// Return a format only for an unambiguous, ordinary HTTP(S) media URL.
 ///
@@ -8,7 +9,8 @@ VideoSourceFormat? directVideoFormat(String source) {
   final uri = Uri.tryParse(source.trim());
   if (uri == null ||
       (uri.scheme != 'https' && uri.scheme != 'http') ||
-      uri.host.isEmpty) {
+      uri.host.isEmpty ||
+      isKnownLivePage(source)) {
     return null;
   }
   final path = uri.path.toLowerCase();

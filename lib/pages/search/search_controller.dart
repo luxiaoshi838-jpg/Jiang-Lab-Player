@@ -11,6 +11,7 @@ import 'package:kazumi/request/apis/bangumi_api.dart';
 import 'package:kazumi/request/apis/trace_api.dart';
 import 'package:kazumi/plugins/plugins_controller.dart';
 import 'package:kazumi/utils/search_parser.dart';
+import 'package:kazumi/services/video_source/video_catalog_scope.dart';
 
 part 'search_controller.g.dart';
 
@@ -144,7 +145,9 @@ abstract class _SearchPageController with Store {
   }
 
   Future<void> _appendRuleResults(String keyword, int generation) async {
-    final rules = _pluginsController.pluginList.toList(growable: false);
+    final rules = _pluginsController.pluginList
+        .where((rule) => !isLiveOnlyRule(rule.type))
+        .toList(growable: false);
     // Avoid flooding many independent sites simultaneously.
     final knownTitles = <String>{
       for (final item in bangumiList)
@@ -169,7 +172,8 @@ abstract class _SearchPageController with Store {
         if (response == null) continue;
         for (final result in response.data.take(30)) {
           final title = result.name.trim();
-          if (title.isEmpty || result.src.trim().isEmpty) continue;
+          if (title.isEmpty || result.src.trim().isEmpty ||
+              isKnownLivePage(result.src)) continue;
           if (!knownTitles.add(title.toLowerCase())) continue;
           bangumiList.add(BangumiItem.fromRule(
             pluginName: batch[i].name,
