@@ -73,7 +73,8 @@ class BangumiItem {
   });
 
   /// A playable catalogue entry returned directly by an installed rule.
-  /// Negative identifiers never overlap with positive Bangumi IDs.
+  /// Reserved high positive IDs avoid collisions with normal Bangumi IDs
+  /// and remain compatible with Hive box integer keys.
   factory BangumiItem.fromRule({
     required String pluginName,
     required String source,
@@ -85,7 +86,7 @@ class BangumiItem {
       hash = ((hash ^ unit) * 0x01000193) & 0x7fffffff;
     }
     return BangumiItem(
-      id: -(hash + 1),
+      id: 0x80000000 | hash,
       type: 6,
       name: title,
       nameCn: title,
