@@ -139,7 +139,7 @@ class _SearchPageState extends State<SearchPage> {
       builder: (context, value, child) => SearchBar(
         controller: _input,
         focusNode: _inputFocus,
-        hintText: '搜索番剧名称',
+        hintText: '搜索番剧、电视剧、电影等',
         textInputAction: TextInputAction.search,
         constraints: const BoxConstraints(minHeight: 64),
         elevation: const WidgetStatePropertyAll(0),
@@ -281,7 +281,7 @@ class _SearchPageState extends State<SearchPage> {
                   onChanged: (sort) =>
                       _applyFilters(submitted.copyWith(sort: sort))),
             IconButton(
-              tooltip: '筛选番剧',
+              tooltip: '筛选作品',
               onPressed: _showFilters,
               icon: Badge(
                   backgroundColor: Theme.of(context).colorScheme.primary,
@@ -295,7 +295,7 @@ class _SearchPageState extends State<SearchPage> {
           Text(
               busy
                   ? '正在搜索…'
-                  : '${items.length} 部番剧${items.length < allItems.length ? ' · 隐藏 ${allItems.length - items.length} 部' : ''}',
+                  : '${items.length} 部作品${items.length < allItems.length ? ' · 隐藏 ${allItems.length - items.length} 部' : ''}',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant)),
           if (summary.isNotEmpty) ...[
@@ -314,14 +314,14 @@ class _SearchPageState extends State<SearchPage> {
         const SliverToBoxAdapter(
           child: GeneralEmptyState(
             icon: Icons.search_off_rounded,
-            title: '没有找到番剧',
+            title: '没有找到作品',
           ),
         )
       else if (items.isEmpty)
         SliverToBoxAdapter(
             child: GeneralEmptyState(
           icon: Icons.filter_alt_off_rounded,
-          title: '这些番剧被筛选隐藏了',
+          title: '这些作品被筛选隐藏了',
           actions: [
             StateActionButton.tonal(
               onPressed: () async {
@@ -369,7 +369,7 @@ class _SearchPageState extends State<SearchPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: const SysAppBar(
-          backgroundColor: Colors.transparent, title: Text('番剧搜索')),
+          backgroundColor: Colors.transparent, title: Text('搜索')),
       body: SafeArea(
           top: false,
           child: LayoutBuilder(builder: (context, constraints) {
