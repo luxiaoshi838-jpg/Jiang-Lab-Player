@@ -38,7 +38,7 @@ def main():
     edit("windows/runner/main.cpp",
          'L"kazumi.win.mutex"', 'L"suibo.win.mutex"', required=False)
     edit("windows/runner/main.cpp",
-         'L"kazumi"', 'L"随播"', required=False)
+         'L"kazumi"', 'L"\\u968F\\u64AD"', required=False)
     cmake = ROOT / "windows" / "CMakeLists.txt"
     src = cmake.read_text(encoding="utf-8")
     src = src.replace('set(BINARY_NAME "kazumi")', 'set(BINARY_NAME "suibo")')
