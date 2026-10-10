@@ -66,8 +66,10 @@ if (suiboKeyFile.exists()) {
             'signingConfig suiboKeyFile.exists() ? signingConfigs.suiboRelease : signingConfigs.debug')
         gradle.write_text(src, encoding="utf-8")
     ignore = ROOT / ".gitignore"
-    with ignore.open("a", encoding="utf-8") as f:
-        f.write("\n# 随播私有签名资料（禁止上传）\n*.jks\n*.keystore\nkey.properties\n**/key.properties\n")
+    private_entries = "\n# 随播私有签名资料（禁止上传）\n*.jks\n*.keystore\nkey.properties\n**/key.properties\n"
+    if "# 随播私有签名资料" not in ignore.read_text(encoding="utf-8"):
+        with ignore.open("a", encoding="utf-8") as f:
+            f.write(private_entries)
     print("SUIBO PATCH OK: Android and Windows branding (original layout unchanged).")
 
 if __name__ == "__main__":
