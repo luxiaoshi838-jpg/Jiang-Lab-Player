@@ -14,6 +14,8 @@ import 'package:kazumi/services/video_source/video_source_failure.dart';
 import 'package:kazumi/services/video_source/services.dart';
 import 'package:kazumi/services/video_source/direct_video_source.dart';
 import 'package:kazumi/services/danmaku/media_danmaku_service.dart';
+import 'package:kazumi/services/danmaku/manual_danmaku_link_store.dart';
+import 'package:kazumi/request/apis/danmaku_api.dart';
 import 'package:kazumi/pages/player/controller/player_danmaku_controller.dart';
 import 'package:kazumi/bean/dialog/dialog_helper.dart';
 import 'package:mobx/mobx.dart';
@@ -542,6 +544,23 @@ abstract class _VideoPageController with Store implements Disposable {
     }
   }
 
+  Future<DanmakuLoadResult?> _rememberedDanmaku(
+      PlaybackInitParams params) async {
+    final linkedId = ManualDanmakuLinkStore.lookup(
+      params.bangumiId, params.danmakuEpisodeNumber,
+    );
+    if (linkedId == null) return null;
+    try {
+      final entries = await DanmakuApi.getDanDanmakuByEpisodeID(linkedId);
+      if (entries.isEmpty) return null;
+      return DanmakuLoadResult.success(danmakus: entries, bangumiID: 0);
+    } catch (error) {
+      KazumiLogger().w('VideoPageController: remembered danmaku unavailable',
+          error: error);
+      return null;
+    }
+  }
+
   Future<void> _loadPlaybackDanmaku(
     PlayerController playerController,
     PlaybackInitParams params,
@@ -554,7 +573,15 @@ abstract class _VideoPageController with Store implements Disposable {
     // a fallback for genuine non-anime subjects and rule-only videos.
     try {
       DanmakuLoadResult result;
-      if (bangumiItem.isExternal) {
+      // Real Bangumi anime retains its original automatic-ID priority.
+      // A user-confirmed link for non-anime VOD wins across source rules.
+      final remembered = !params.isLocalPlayback &&
+              (bangumiItem.isExternal || bangumiItem.type != 2)
+          ? await _rememberedDanmaku(params)
+          : null;
+      if (remembered != null) {
+        result = remembered;
+      } else if (bangumiItem.isExternal) {
         final cached = params.isLocalPlayback
             ? await playerController.danmaku.fetchCachedOnlyDanmaku(
                 params.bangumiId,
