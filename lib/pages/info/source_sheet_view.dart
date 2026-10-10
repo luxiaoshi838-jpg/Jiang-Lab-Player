@@ -5,12 +5,14 @@ class _SourceSearchGroup {
     required this.name,
     required this.keyword,
     required this.status,
+    this.failureHint,
     required this.results,
   });
 
   final String name;
   final String keyword;
   final PluginSearchStatus status;
+  final String? failureHint;
   final List<SearchItem> results;
 
   bool get isSearching => status == PluginSearchStatus.pending;
@@ -335,7 +337,8 @@ class _SourceSheetViewState extends State<_SourceSheetView> {
           PluginSearchStatus.captcha =>
             _buildSourceIssue(group.name, requiresVerification: true),
           PluginSearchStatus.error =>
-            _buildSourceIssue(group.name, requiresVerification: false),
+            _buildSourceIssue(group.name, requiresVerification: false,
+                failureHint: group.failureHint),
         },
       );
     }
@@ -474,7 +477,7 @@ class _SourceSheetViewState extends State<_SourceSheetView> {
       );
 
   Widget _buildSourceIssue(String sourceName,
-      {required bool requiresVerification}) {
+      {required bool requiresVerification, String? failureHint}) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final (icon, title, hint, action, onAction) = requiresVerification
@@ -488,7 +491,7 @@ class _SourceSheetViewState extends State<_SourceSheetView> {
         : (
             Icons.error_outline_rounded,
             '检索失败',
-            '可以重试，或打开网站检查是否可用。',
+            failureHint ?? '可以重试，或打开网站检查是否可用。',
             '重试',
             () => widget.onRetry(sourceName),
           );
