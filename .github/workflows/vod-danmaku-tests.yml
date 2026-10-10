@@ -2,8 +2,10 @@ name: VOD danmaku regression
 on:
   pull_request:
     branches: [main]
-  push:
-    branches: [feature/vod-danmaku-matching-20261010]
+
+concurrency:
+  group: vod-danmaku-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
