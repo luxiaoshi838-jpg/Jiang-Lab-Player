@@ -10,6 +10,7 @@ import 'package:kazumi/modules/download/download_module.dart';
 import 'package:kazumi/modules/history/history_module.dart';
 import 'package:kazumi/repositories/download_repository.dart';
 import 'package:kazumi/services/download/download_manager.dart';
+import 'package:kazumi/services/video_source/video_source_failure.dart';
 import 'package:kazumi/services/video_source/services.dart';
 import 'package:kazumi/services/video_source/direct_video_source.dart';
 import 'package:kazumi/services/danmaku/media_danmaku_service.dart';
@@ -685,6 +686,9 @@ abstract class _VideoPageController with Store implements Disposable {
       if (session.isStale) {
         return;
       }
+      if (!VideoSourceFailure.isOnlineMediaUrl(source.url)) {
+        throw const VideoSourceNotFoundException('non-HTTP online media URL');
+      }
       _finishLoading();
       KazumiLogger()
           .i('VideoPageController: resolved video URL: ${source.url}');
@@ -741,7 +745,7 @@ abstract class _VideoPageController with Store implements Disposable {
       if (session.isStale) {
         return;
       }
-      _failLoading('视频解析失败：${e.toString()}');
+      _failLoading(VideoSourceFailure.stream(e));
     }
   }
 

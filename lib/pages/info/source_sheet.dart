@@ -22,6 +22,7 @@ import 'package:kazumi/plugins/anti_crawler_config.dart';
 import 'package:kazumi/plugins/plugins.dart';
 import 'package:kazumi/plugins/plugins_controller.dart';
 import 'package:kazumi/services/logging/logger.dart';
+import 'package:kazumi/services/video_source/video_source_failure.dart';
 import 'package:kazumi/services/video_source/direct_video_source.dart';
 import 'package:kazumi/services/plugin/captcha_verification_service.dart';
 import 'package:kazumi/services/plugin/plugin_search_service.dart';
@@ -180,7 +181,7 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
           ));
     }, onError: (error, stackTrace) {
       KazumiLogger().w('SourceSheet: failed to query playlist', error: error);
-      KazumiDialog.showToast(message: '未能获取播放列表，请重试或选择其他结果');
+      KazumiDialog.showToast(message: VideoSourceFailure.playlist(error));
     });
   }
 
