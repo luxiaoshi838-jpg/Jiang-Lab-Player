@@ -24,6 +24,7 @@ import 'package:kazumi/plugins/plugins_controller.dart';
 import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/services/video_source/video_source_failure.dart';
 import 'package:kazumi/services/video_source/direct_video_source.dart';
+import 'package:kazumi/services/video_source/official_video_search.dart';
 import 'package:kazumi/services/plugin/captcha_verification_service.dart';
 import 'package:kazumi/services/plugin/plugin_search_service.dart';
 import 'package:kazumi/services/plugin/rule_engine_models.dart'
@@ -123,6 +124,19 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
       plugin.name,
       onComplete: () => _retry(plugin.name),
     );
+  }
+
+  Future<void> _openOfficialPlatform(OfficialVideoPlatform platform) async {
+    final url = OfficialVideoSearch.searchUrl(platform, _keyword);
+    try {
+      if (await launchUrl(url, mode: LaunchMode.externalApplication)) return;
+    } catch (error) {
+      KazumiLogger().w('SourceSheet: official platform search failed',
+          error: error);
+    }
+    if (mounted) {
+      KazumiDialog.showToast(message: '无法打开平台网页，请检查浏览器');
+    }
   }
 
   Future<void> _openInBrowser(String name) async {
@@ -249,6 +263,7 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
             onVerify: (name) =>
                 _captchaFlow.start(_pluginFor(name), _keywordFor(name)),
             onOpenBrowser: _openInBrowser,
+            onOpenOfficialPlatform: _openOfficialPlatform,
             onPlay: _openSearchItem,
             onClose: () => Navigator.of(context).pop(),
           );
