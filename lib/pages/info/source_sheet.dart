@@ -66,16 +66,27 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
       onCancelled: (plugin) => _retry(plugin.name),
     );
     _searchService.queryAllSource(_keyword);
-    // A rule-only title carries the exact previously discovered source URL.
-    // Display it immediately so a bookshelf entry can be reopened even
-    // when a later keyword search returns a different result.
-    if (item.isExternal &&
-        _pluginsController.pluginList.any((p) => p.name == item.sourcePlugin)) {
+    // Preserve all rule URLs discovered during unified search. The live
+    // source lookup may replace its response later; this snapshot remains
+    // visible, deduplicated by URL in the source sheet.
+    final installed = _pluginsController.pluginList
+        .map((plugin) => plugin.name).toSet();
+    final cached = <String, List<SearchItem>>{};
+    for (final hit in item.discoveredSources) {
+      if (!installed.contains(hit.pluginName)) continue;
+      cached.putIfAbsent(hit.pluginName, () => []).add(
+        SearchItem(name: hit.title, src: hit.url),
+      );
+    }
+    // Bookmarks made before aggregation keep their original playable link.
+    if (item.isExternal && installed.contains(item.sourcePlugin)) {
+      cached.putIfAbsent(item.sourcePlugin, () => []).add(
+        SearchItem(name: _keyword, src: item.sourceUrl),
+      );
+    }
+    for (final entry in cached.entries) {
       widget.infoController.pluginSearchResponseList.add(
-        PluginSearchResponse(
-          pluginName: item.sourcePlugin,
-          data: [SearchItem(name: _keyword, src: item.sourceUrl)],
-        ),
+        PluginSearchResponse(pluginName: entry.key, data: entry.value),
       );
     }
   }
