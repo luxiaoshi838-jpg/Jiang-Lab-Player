@@ -41,6 +41,20 @@ class DanmakuApi {
     return DanmakuSearchResponse.fromJson(jsonData);
   }
 
+  /// Documented TMDB-ID reverse search, distinct from Bangumi ID mapping.
+  /// One TMDB series may correspond to several DanDanPlay seasons.
+  static Future<DanmakuSearchResponse> searchByTmdbId(
+      int tmdbId, int episode) async {
+    final endpoint = ApiEndpoints.dandanAPIDomain +
+        ApiEndpoints.dandanAPISearchEpisodes;
+    final data = await _client.get(endpoint, queryParameters: {
+      'tmdbId': tmdbId,
+      'episode': episode,
+      'v2': 'true',
+    });
+    return DanmakuSearchResponse.fromJson(data);
+  }
+
   static Future<List<DanmakuEntry>> getDanDanmaku(
     int bangumiID,
     int episode,
