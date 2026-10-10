@@ -468,7 +468,12 @@ class _InfoPageState extends State<InfoPage>
         }),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        tooltip: '开始观看',
+        tooltip: infoController.bangumiItem.isExternal &&
+                (infoController.bangumiItem.sourcePlugin == '百科影视目录' ||
+                 infoController.bangumiItem.sourcePlugin == 'TVmaze节目目录') &&
+                infoController.bangumiItem.discoveredSources.isEmpty
+            ? '查找播放来源'
+            : '开始观看',
         onPressed: () {
           showAdaptiveBottomSheet<void>(
             context: context,
@@ -478,7 +483,12 @@ class _InfoPageState extends State<InfoPage>
             },
           );
         },
-        label: const Text('开始观看'),
+        label: Text(infoController.bangumiItem.isExternal &&
+                (infoController.bangumiItem.sourcePlugin == '百科影视目录' ||
+                 infoController.bangumiItem.sourcePlugin == 'TVmaze节目目录') &&
+                infoController.bangumiItem.discoveredSources.isEmpty
+            ? '查找播放来源'
+            : '开始观看'),
         icon: const Icon(Icons.play_arrow_rounded),
       ),
     );
