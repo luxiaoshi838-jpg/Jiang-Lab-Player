@@ -154,6 +154,34 @@ abstract class _PlayerDanmakuController with Store {
     );
   }
 
+  /// Use existing offline danmaku files without querying DanDanPlay with a
+  /// synthetic rule-only ID. Offline files are keyed by download episode
+  /// number, not by the visual index of the selected episode.
+  Future<DanmakuLoadResult?> fetchCachedOnlyDanmaku(
+    int bangumiId,
+    String pluginName,
+    int episodeNumber,
+  ) async {
+    try {
+      final entries = await downloadController.getCachedDanmakus(
+        bangumiId,
+        pluginName,
+        episodeNumber,
+      );
+      if (entries == null || entries.isEmpty) return null;
+      return DanmakuLoadResult.success(
+        danmakus: entries,
+        bangumiID: 0,
+      );
+    } catch (error) {
+      KazumiLogger().w(
+        'PlayerDanmakuController: rule-video cached danmaku unavailable',
+        error: error,
+      );
+      return null;
+    }
+  }
+
   @action
   void beginDanmakuLoad() {
     danDanmakus.clear();
