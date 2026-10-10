@@ -43,9 +43,21 @@ class _InfoActionsMenuState extends State<InfoActionsMenu> {
   }
 
   Future<void> _openExternally() async {
+    final item = widget.bangumiItem;
+    final external = Uri.tryParse(item.sourceUrl);
+    final target = item.isExternal
+        ? (external != null &&
+                (external.scheme == 'https' || external.scheme == 'http')
+            ? external
+            : null)
+        : Uri.https('bangumi.tv', '/subject/${item.id}');
+    if (target == null) {
+      _notify('该资源没有可直接打开的网页地址');
+      return;
+    }
     try {
       if (await launchUrl(
-        Uri.https('bangumi.tv', '/subject/${widget.bangumiItem.id}'),
+        target,
         mode: LaunchMode.externalApplication,
       )) {
         return;
