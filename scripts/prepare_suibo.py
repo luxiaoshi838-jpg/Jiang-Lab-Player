@@ -34,6 +34,11 @@ def main():
     edit("windows/runner/Runner.rc",
          'VALUE "OriginalFilename", "kazumi.exe" "\\0"',
          'VALUE "OriginalFilename", "suibo.exe" "\\0"', required=False)
+    # Keep the new installer separate from Kazumi's single-instance window.
+    edit("windows/runner/main.cpp",
+         'L"kazumi.win.mutex"', 'L"suibo.win.mutex"', required=False)
+    edit("windows/runner/main.cpp",
+         'L"kazumi"', 'L"随播"', required=False)
     cmake = ROOT / "windows" / "CMakeLists.txt"
     src = cmake.read_text(encoding="utf-8")
     src = src.replace('set(BINARY_NAME "kazumi")', 'set(BINARY_NAME "suibo")')
