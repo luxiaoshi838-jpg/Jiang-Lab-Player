@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:kazumi/modules/danmaku/danmaku_module.dart';
+import 'package:kazumi/modules/danmaku/danmaku_episode_response.dart';
+import 'package:kazumi/modules/danmaku/danmaku_search_response.dart';
 import 'package:kazumi/request/apis/danmaku_api.dart';
 import 'package:kazumi/request/core/dio_factory.dart';
 import 'package:kazumi/services/logging/logger.dart';
@@ -55,6 +57,8 @@ class MediaDanmakuService {
     required String title,
     required int episode,
     required Iterable<String> pageUrls,
+    Iterable<String> titleAliases = const <String>[],
+    String episodeTitle = '',
   }) async {
     // Native CID is an exact identity for a single Bilibili video page.
     for (final url in pageUrls) {
@@ -70,33 +74,156 @@ class MediaDanmakuService {
       break;
     }
 
-    // Fallback requires exactly one strictly identical work title. Never
-    // attach ambiguous or partial matches to a possibly different timeline.
-    final normalized = normalizeTitle(title);
-    if (normalized.isEmpty) return null;
-    try {
-      final candidates = await DanmakuApi.searchAnimes(title.trim());
-      final matched = candidates.animes.where(
-        (e) => normalizeTitle(e.animeTitle) == normalized,
-      ).toList();
-      if (matched.length != 1) return null;
-      final chosen = matched.single;
-      final details =
-          await DanmakuApi.getDanDanEpisodesByDanDanBangumiID(chosen.animeId);
-      if (episode < 1 || episode > details.episodes.length) return null;
-      final episodeId = details.episodes[episode - 1].episodeId;
-      final comments = await DanmakuApi.getDanDanmakuByEpisodeID(episodeId);
-      if (comments.isEmpty) return null;
-      return MediaDanmakuMatch(comments, dandanId: chosen.animeId);
-    } catch (error) {
-      KazumiLogger().w('MediaDanmaku: exact title match unavailable',
-          error: error);
-      return null;
+    // A work must have a unique identity. Search a small number of supplied
+    // titles (rather than guessing a different show or downloading catalogs).
+    // Always load the explicit episodeId from the server's episode list.
+    final searched = <String>{};
+    for (final query in <String>[title, ...titleAliases]) {
+      final normalized = normalizeTitle(query);
+      if (normalized.isEmpty || !searched.add(normalized)) continue;
+      if (searched.length > 3) break;
+      try {
+        final candidates = await DanmakuApi.searchAnimes(query.trim());
+        final chosen = selectAnime(candidates, query);
+        if (chosen == null) continue;
+        final details =
+            await DanmakuApi.getDanDanEpisodesByDanDanBangumiID(chosen.animeId);
+        final episodeId = selectEpisodeId(
+          details.episodes,
+          episode,
+          episodeTitle: episodeTitle,
+        );
+        if (episodeId == null) continue;
+        final comments = await DanmakuApi.getDanDanmakuByEpisodeID(episodeId);
+        if (comments.isNotEmpty) {
+          return MediaDanmakuMatch(comments, dandanId: chosen.animeId);
+        }
+      } catch (error) {
+        KazumiLogger().w(
+          'MediaDanmaku: title/episode match unavailable',
+          error: error,
+        );
+      }
     }
+    return null;
   }
 
-  static String normalizeTitle(String title) =>
-      title.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  /// Normalize harmless presentation differences, never strip seasons or
+  /// edition words indiscriminately.
+  static String normalizeTitle(String title) {
+    final ascii = title.replaceAllMapped(
+      RegExp(r'[\uFF01-\uFF5E]'),
+      (m) => String.fromCharCode(m.group(0)!.codeUnitAt(0) - 0xFEE0),
+    );
+    return ascii.toLowerCase().replaceAll(
+      RegExp(r'[\s_\-—–·:：.。!！?？《》〈〉\[\]【】（）(),，、]'),
+      '',
+    );
+  }
+
+  static int? _season(String normalized) {
+    final match = _seasonSuffix.firstMatch(normalized);
+    if (match == null) return null;
+    final value = match.group(1) ?? match.group(2) ?? match.group(3)!;
+    const chinese = {
+      '一': 1, '二': 2, '三': 3, '四': 4, '五': 5,
+      '六': 6, '七': 7, '八': 8, '九': 9, '十': 10,
+    };
+    return int.tryParse(value) ?? chinese[value];
+  }
+
+  static final RegExp _seasonSuffix = RegExp(
+    r'(?:第([0-9一二三四五六七八九十]+)季|season0*([0-9]+)|s0*([0-9]+))$',
+  );
+
+  static bool titlesMatch(String requested, String found) {
+    final a = normalizeTitle(requested);
+    final b = normalizeTitle(found);
+    if (a.isEmpty || b.isEmpty) return false;
+    if (a == b) return true;
+    final aSeason = _season(a);
+    final bSeason = _season(b);
+    if (aSeason == null && bSeason == null) return false;
+    // An unlabelled work may represent season one, but never guess later
+    // seasons. Multiple season-one candidates remain ambiguous below.
+    if (aSeason != bSeason &&
+        !(aSeason == null && bSeason == 1) &&
+        !(bSeason == null && aSeason == 1)) {
+      return false;
+    }
+    final aBase = a.replaceFirst(_seasonSuffix, '');
+    final bBase = b.replaceFirst(_seasonSuffix, '');
+    return aBase.isNotEmpty && aBase == bBase;
+  }
+
+  /// Never silently select from duplicated titles or a truncated result set.
+  static DanmakuSearchAnime? selectAnime(
+    DanmakuSearchResponse response,
+    String title,
+  ) {
+    if (response.hasMore) return null;
+    final unique = <int, DanmakuSearchAnime>{};
+    for (final candidate in response.animes) {
+      if (titlesMatch(title, candidate.animeTitle)) {
+        unique[candidate.animeId] = candidate;
+      }
+    }
+    return unique.length == 1 ? unique.values.single : null;
+  }
+
+  static String? _date(String title) {
+    final match = RegExp(
+      r'(20[0-9]{2})[年./-](0?[1-9]|1[0-2])[月./-](0?[1-9]|[12][0-9]|3[01])日?',
+    ).firstMatch(title);
+    if (match == null) return null;
+    final year = match.group(1)!;
+    final month = match.group(2)!.padLeft(2, '0');
+    final day = match.group(3)!.padLeft(2, '0');
+    return '$year-$month-$day';
+  }
+
+  static String _edition(String title) {
+    for (final marker in <String>['加更', '纯享', '特别', '番外', '花絮', '先导']) {
+      if (title.contains(marker)) return marker;
+    }
+    return '正片';
+  }
+
+  static int? _episodeNumber(String title) {
+    final chinese = RegExp(r'第\s*0*([0-9]{1,4})\s*[集话期]').firstMatch(title);
+    if (chinese != null) return int.tryParse(chinese.group(1)!);
+    final english = RegExp(
+      r'(?:^|[\s_.-])(?:ep|episode|e)\s*0*([0-9]{1,4})(?:\b|$)',
+      caseSensitive: false,
+    ).firstMatch(title);
+    return english == null ? null : int.tryParse(english.group(1)!);
+  }
+
+  /// Only bind a confidently identified episode. A numeric position in an
+  /// unordered/variant episode list is not a reliable episode identity.
+  static int? selectEpisodeId(
+    List<DanmakuEpisode> entries,
+    int episode, {
+    String episodeTitle = '',
+  }) {
+    if (episode < 1 || entries.isEmpty) return null;
+    final requestedEdition = _edition(episodeTitle);
+    final requestedDate = _date(episodeTitle);
+    final matches = entries.where((entry) {
+      if (_edition(entry.episodeTitle) != requestedEdition) return false;
+      if (requestedDate != null) return _date(entry.episodeTitle) == requestedDate;
+      return _episodeNumber(entry.episodeTitle) == episode;
+    }).toList();
+    if (matches.length == 1) return matches.single.episodeId;
+    if (matches.isNotEmpty || requestedDate != null) return null;
+    // A movie or a genuinely single-part work has an unambiguous lone entry.
+    if (episode == 1 && entries.length == 1 &&
+        _edition(entries.single.episodeTitle) == requestedEdition &&
+        _episodeNumber(entries.single.episodeTitle) == null) {
+      return entries.single.episodeId;
+    }
+    return null;
+  }
 
   static Future<List<DanmakuEntry>> fetchBilibili(
       BilibiliVideoRef video) async {
