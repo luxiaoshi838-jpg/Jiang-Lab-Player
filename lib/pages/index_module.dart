@@ -4,7 +4,6 @@ import 'package:kazumi/bean/widget/error_widget.dart';
 import 'package:kazumi/bean/widget/image_preview.dart';
 import 'package:kazumi/pages/collect/collect_module.dart';
 import 'package:kazumi/pages/index_page.dart';
-import 'package:kazumi/pages/suibo/suibo_search_page.dart';
 import 'package:kazumi/pages/info/info_module.dart';
 import 'package:kazumi/pages/init_page.dart';
 import 'package:kazumi/pages/my/my_module.dart';
@@ -62,8 +61,7 @@ final tabModule = createModule(
             ..module(popularModule)
             ..module(timelineModule)
             ..module(collectModule)
-            ..module(myModule)
-            ..route('/suibo', child: (context, state) => const SuiboSearchPage());
+            ..module(myModule);
         },
       );
   },
