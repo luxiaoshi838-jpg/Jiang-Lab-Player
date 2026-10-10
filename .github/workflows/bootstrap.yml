@@ -33,7 +33,7 @@ jobs:
           if [ ! -f pubspec.yaml ]; then
             git clone --depth 1 --branch main https://github.com/Predidit/Kazumi.git /tmp/suibo-upstream
             printf "Imported Kazumi commit: " && git -C /tmp/suibo-upstream rev-parse HEAD
-            git -C /tmp/suibo-upstream submodule update --init --recursive
+            # fastlane submodules include the full Flutter SDK; not needed for builds.
             rsync -a /tmp/suibo-upstream/ ./ \
               --exclude=.git --exclude=.github --exclude=README.md \
               --exclude='scripts/prepare_suibo.py' --exclude='lib/pages/suibo'
