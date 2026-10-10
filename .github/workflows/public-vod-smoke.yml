@@ -1,0 +1,14 @@
+name: Public VOD discovery and HLS smoke
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  public-vod-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - name: Real public API search then inspect playback manifest
+        run: python3 scripts/smoke_public_vod.py
