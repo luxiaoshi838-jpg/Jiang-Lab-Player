@@ -37,6 +37,15 @@ class BangumiItem {
   List<int> votesCount;
   @HiveField(14, defaultValue: '')
   String info;
+  // Rule-only media has no Bangumi subject ID. These fields are persisted
+  // alongside the existing subject, so collections and histories still work.
+  @HiveField(15, defaultValue: '')
+  String sourcePlugin;
+  @HiveField(16, defaultValue: '')
+  String sourceUrl;
+
+  bool get isExternal => sourcePlugin.isNotEmpty && sourceUrl.isNotEmpty;
+
   // Calendar metadata is separate from counted user tags and is not persisted.
   final List<String> metaTags;
   BangumiInterest? interest;
@@ -57,9 +66,44 @@ class BangumiItem {
     required this.votes,
     required this.votesCount,
     required this.info,
+    this.sourcePlugin = '',
+    this.sourceUrl = '',
     this.metaTags = const [],
     this.interest,
   });
+
+  /// A playable catalogue entry returned directly by an installed rule.
+  /// Negative identifiers never overlap with positive Bangumi IDs.
+  factory BangumiItem.fromRule({
+    required String pluginName,
+    required String source,
+    required String title,
+  }) {
+    final key = '$pluginName|$source';
+    var hash = 0x811c9dc5;
+    for (final unit in key.codeUnits) {
+      hash = ((hash ^ unit) * 0x01000193) & 0x7fffffff;
+    }
+    return BangumiItem(
+      id: -(hash + 1),
+      type: 6,
+      name: title,
+      nameCn: title,
+      summary: '来源：$pluginName',
+      airDate: '',
+      airWeekday: 1,
+      rank: 0,
+      images: const {'large': '', 'common': '', 'medium': '', 'small': '', 'grid': ''},
+      tags: [],
+      alias: [],
+      ratingScore: 0,
+      votes: 0,
+      votesCount: [],
+      info: '',
+      sourcePlugin: pluginName,
+      sourceUrl: source,
+    );
+  }
 
   factory BangumiItem.fromJson(Map<String, dynamic> json) {
     List<String> parseBangumiAliases(Map<String, dynamic> jsonData) {
