@@ -28,6 +28,9 @@ def suiboKeyFile = rootProject.file('key.properties')
 if (suiboKeyFile.exists()) {
     suiboKeyFile.withInputStream { suiboKeyProperties.load(it) }
 }
+def suiboSigningFields = ['storeFile', 'storePassword', 'keyAlias', 'keyPassword']
+def suiboSigningConfigured = suiboKeyFile.exists() &&
+        suiboSigningFields.every { suiboKeyProperties[it]?.toString()?.trim() }
 
 android {
     namespace "com.example.kazumi"
@@ -62,7 +65,7 @@ android {
 
     signingConfigs {
         suiboRelease {
-            if (suiboKeyFile.exists()) {
+            if (suiboSigningConfigured) {
                 storeFile file(suiboKeyProperties['storeFile'])
                 storePassword suiboKeyProperties['storePassword']
                 keyAlias suiboKeyProperties['keyAlias']
@@ -72,11 +75,26 @@ android {
     }
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig suiboKeyFile.exists() ? signingConfigs.suiboRelease : signingConfigs.debug
+            // Never silently sign a release with Android's debug certificate.
+            // The verify task below fails an unsigned production build.
+            signingConfig suiboSigningConfigured ? signingConfigs.suiboRelease : null
         }
     }
+}
+
+
+tasks.register('verifySuiboReleaseSigning') {
+    doLast {
+        if (!suiboSigningConfigured) {
+            throw new GradleException('Private Android release signing is required; see scripts/private_android_release.py')
+        }
+        if (!file(suiboKeyProperties['storeFile']).isFile()) {
+            throw new GradleException('Private Android signing keystore file does not exist')
+        }
+    }
+}
+tasks.matching { it.name == 'preReleaseBuild' }.configureEach {
+    dependsOn tasks.named('verifySuiboReleaseSigning')
 }
 
 flutter {

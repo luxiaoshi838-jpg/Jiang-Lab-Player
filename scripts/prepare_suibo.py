@@ -46,13 +46,16 @@ def suiboKeyFile = rootProject.file('key.properties')
 if (suiboKeyFile.exists()) {
     suiboKeyFile.withInputStream { suiboKeyProperties.load(it) }
 }
+def suiboSigningFields = ['storeFile', 'storePassword', 'keyAlias', 'keyPassword']
+def suiboSigningConfigured = suiboKeyFile.exists() &&
+        suiboSigningFields.every { suiboKeyProperties[it]?.toString()?.trim() }
 """
     if 'def suiboKeyProperties' not in src:
         src = src.replace('android {\n', key_config + '\nandroid {\n', 1)
         src = src.replace('    buildTypes {\n',
             """    signingConfigs {
         suiboRelease {
-            if (suiboKeyFile.exists()) {
+            if (suiboSigningConfigured) {
                 storeFile file(suiboKeyProperties['storeFile'])
                 storePassword suiboKeyProperties['storePassword']
                 keyAlias suiboKeyProperties['keyAlias']
@@ -63,7 +66,23 @@ if (suiboKeyFile.exists()) {
     buildTypes {
 """, 1)
         src = src.replace('signingConfig signingConfigs.debug',
-            'signingConfig suiboKeyFile.exists() ? signingConfigs.suiboRelease : signingConfigs.debug')
+            'signingConfig suiboSigningConfigured ? signingConfigs.suiboRelease : null')
+        verify_task = """tasks.register('verifySuiboReleaseSigning') {
+    doLast {
+        if (!suiboSigningConfigured) {
+            throw new GradleException('Private Android release signing is required; see scripts/private_android_release.py')
+        }
+        if (!file(suiboKeyProperties['storeFile']).isFile()) {
+            throw new GradleException('Private Android signing keystore file does not exist')
+        }
+    }
+}
+tasks.matching { it.name == 'preReleaseBuild' }.configureEach {
+    dependsOn tasks.named('verifySuiboReleaseSigning')
+}
+
+"""
+        src = src.replace("\nflutter {\n", "\n" + verify_task + "flutter {\n", 1)
         gradle.write_text(src, encoding="utf-8")
     ignore = ROOT / ".gitignore"
     private_entries = "\n# 随播私有签名资料（禁止上传）\n*.jks\n*.keystore\nkey.properties\n**/key.properties\n"
