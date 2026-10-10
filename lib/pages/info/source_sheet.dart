@@ -14,6 +14,7 @@ import 'package:kazumi/bean/widget/empty_state_widget.dart';
 import 'package:kazumi/bean/widget/split_list_row.dart';
 import 'package:kazumi/bean/widget/state_presentation.dart';
 import 'package:kazumi/modules/search/plugin_search_module.dart';
+import 'package:kazumi/modules/roads/road_module.dart';
 import 'package:kazumi/pages/collect/collect_controller.dart';
 import 'package:kazumi/pages/info/info_controller.dart';
 import 'package:kazumi/pages/video/video_playback_args.dart';
@@ -21,6 +22,7 @@ import 'package:kazumi/plugins/anti_crawler_config.dart';
 import 'package:kazumi/plugins/plugins.dart';
 import 'package:kazumi/plugins/plugins_controller.dart';
 import 'package:kazumi/services/logging/logger.dart';
+import 'package:kazumi/services/video_source/direct_video_source.dart';
 import 'package:kazumi/services/plugin/captcha_verification_service.dart';
 import 'package:kazumi/services/plugin/plugin_search_service.dart';
 import 'package:kazumi/services/plugin/rule_engine_models.dart'
@@ -135,13 +137,25 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
     final plugin = _pluginFor(name);
     await dialogs.run((task) async {
       final cancelToken = RuleCancelToken();
-      final roads = await task.loading(
-        message: '正在获取播放列表',
-        barrierDismissible: isDesktop(),
-        onCancel: cancelToken.cancel,
-        action: () =>
-            plugin.queryChapterRoads(searchItem.src, cancelToken: cancelToken),
-      );
+      // Single videos and direct live streams have no episode page.
+      // Keep the original chapter parser for every other rule result.
+      final roads = directVideoFormat(searchItem.src) != null
+          ? <Road>[
+              Road(
+                name: '直接播放',
+                data: [searchItem.src],
+                identifier: [searchItem.name],
+              ),
+            ]
+          : await task.loading(
+              message: '正在获取播放列表',
+              barrierDismissible: isDesktop(),
+              onCancel: cancelToken.cancel,
+              action: () => plugin.queryChapterRoads(
+                searchItem.src,
+                cancelToken: cancelToken,
+              ),
+            );
       if (roads.isEmpty) throw ChapterErrorException(plugin.name);
       task.withContext((context) => context.pushNamed(
             '/video/',

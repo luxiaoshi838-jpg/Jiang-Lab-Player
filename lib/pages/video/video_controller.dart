@@ -11,6 +11,7 @@ import 'package:kazumi/modules/history/history_module.dart';
 import 'package:kazumi/repositories/download_repository.dart';
 import 'package:kazumi/services/download/download_manager.dart';
 import 'package:kazumi/services/video_source/services.dart';
+import 'package:kazumi/services/video_source/direct_video_source.dart';
 import 'package:kazumi/bean/dialog/dialog_helper.dart';
 import 'package:mobx/mobx.dart';
 import 'package:kazumi/services/logging/logger.dart';
@@ -593,21 +594,31 @@ abstract class _VideoPageController with Store implements Disposable {
     required AsyncSession session,
     required PlayerController playerController,
   }) async {
-    _videoSourceService ??= WebViewVideoSourceService();
-
-    await _logSubscription?.cancel();
-    _logSubscription = _videoSourceService!.onLog.listen((log) {
-      if (!_logStreamController.isClosed) {
-        _logStreamController.add(log);
-      }
-    });
+    final directFormat = directVideoFormat(url);
+    if (directFormat == null) {
+      _videoSourceService ??= WebViewVideoSourceService();
+      await _logSubscription?.cancel();
+      _logSubscription = _videoSourceService!.onLog.listen((log) {
+        if (!_logStreamController.isClosed) {
+          _logStreamController.add(log);
+        }
+      });
+    }
 
     try {
-      final source = await _videoSourceService!.resolve(
-        url,
-        useLegacyParser: currentPlugin.useLegacyParser,
-        offset: offset,
-      );
+      // Direct media URLs do not need the WebView page-extraction step.
+      final source = directFormat == null
+          ? await _videoSourceService!.resolve(
+              url,
+              useLegacyParser: currentPlugin.useLegacyParser,
+              offset: offset,
+            )
+          : VideoSource(
+              url: url,
+              offset: offset,
+              type: VideoSourceType.online,
+              format: directFormat,
+            );
 
       if (session.isStale) {
         return;

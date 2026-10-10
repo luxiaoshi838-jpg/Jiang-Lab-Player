@@ -72,7 +72,7 @@ class BangumiItem {
     this.interest,
   });
 
-  /// A playable catalogue entry returned directly by an installed rule.
+  /// Any video returned by a configured rule, independent of its category.
   /// Reserved high positive IDs avoid collisions with normal Bangumi IDs
   /// and remain compatible with Hive box integer keys.
   factory BangumiItem.fromRule({
@@ -87,7 +87,7 @@ class BangumiItem {
     }
     return BangumiItem(
       id: 0x80000000 | hash,
-      type: 6,
+      type: 0, // Unclassified rule item, not a Bangumi subject type.
       name: title,
       nameCn: title,
       summary: '来源：$pluginName',
