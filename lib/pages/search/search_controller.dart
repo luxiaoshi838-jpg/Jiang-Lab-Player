@@ -9,6 +9,7 @@ import 'package:kazumi/repositories/collect_repository.dart';
 import 'package:kazumi/repositories/search_history_repository.dart';
 import 'package:kazumi/request/apis/bangumi_api.dart';
 import 'package:kazumi/request/apis/trace_api.dart';
+import 'package:kazumi/plugins/plugins_controller.dart';
 import 'package:kazumi/utils/search_parser.dart';
 
 part 'search_controller.g.dart';
@@ -22,10 +23,12 @@ abstract class _SearchPageController with Store {
   _SearchPageController(
     this._collectRepository,
     this._searchHistoryRepository,
+    this._pluginsController,
   );
 
   final ICollectRepository _collectRepository;
   final ISearchHistoryRepository _searchHistoryRepository;
+  final PluginsController _pluginsController;
 
   int _searchOffset = 0;
   int _searchGeneration = 0;
@@ -126,9 +129,55 @@ abstract class _SearchPageController with Store {
         break;
       }
     } while (hasMoreSearchResults && pagesFetched < _maxPagesPerSearch);
+    // Extend the original search grid using rule-provided titles for media
+    // not indexed in Bangumi. Filters are applied only to metadata results:
+    // a rule cannot reliably honour Bangumi tags, dates or ratings.
+    if (type != 'add' &&
+        filterState.keyword.trim().isNotEmpty &&
+        !filterState.hasAdvancedFilters) {
+      await _appendRuleResults(filterState.keyword.trim(), generation);
+    }
+    if (generation != _searchGeneration) return;
     isLoading = false;
     isTimeOut =
         bangumiList.isEmpty && (pagesFetched == 0 || !hasMoreSearchResults);
+  }
+
+  Future<void> _appendRuleResults(String keyword, int generation) async {
+    final rules = _pluginsController.pluginList.toList(growable: false);
+    // Avoid flooding many independent sites simultaneously.
+    final knownTitles = <String>{
+      for (final item in bangumiList)
+        (item.nameCn.isNotEmpty ? item.nameCn : item.name)
+            .trim().toLowerCase(),
+      for (final item in bangumiList) item.name.trim().toLowerCase(),
+    };
+    for (var start = 0; start < rules.length; start += 4) {
+      if (generation != _searchGeneration) return;
+      final batch = rules.skip(start).take(4).toList();
+      final responses = await Future.wait(batch.map((rule) async {
+        try {
+          return await rule.queryBangumi(keyword, shouldRethrow: true);
+        } catch (_) {
+          return null; // A broken rule must not break the main search.
+        }
+      }));
+      if (generation != _searchGeneration) return;
+      for (var i = 0; i < batch.length; i++) {
+        final response = responses[i];
+        if (response == null) continue;
+        for (final result in response.data.take(30)) {
+          final title = result.name.trim();
+          if (title.isEmpty || result.src.trim().isEmpty) continue;
+          if (!knownTitles.add(title.toLowerCase())) continue;
+          bangumiList.add(BangumiItem.fromRule(
+            pluginName: batch[i].name,
+            source: result.src,
+            title: title,
+          ));
+        }
+      }
+    }
   }
 
   @action
