@@ -19,6 +19,7 @@ import 'package:kazumi/pages/player/controller/player_danmaku_controller.dart';
 import 'package:kazumi/request/apis/danmaku_api.dart';
 import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/services/storage/storage.dart';
+import 'package:kazumi/services/danmaku/manual_danmaku_link_store.dart';
 
 const _episodeToolThreshold = 25;
 const _episodeSegmentSize = 100;
@@ -27,12 +28,16 @@ const _episodeRowExtent = 64.0;
 Future<void> showDanmakuSourceSheet(
   BuildContext context, {
   required int bangumiId,
+  required int episodeNumber,
+  required bool rememberSelection,
   required String initialKeyword,
   required PlayerDanmakuController danmakuController,
   required VoidCallback onBeforeApply,
 }) async {
   Widget buildSheet(BuildContext _) => _DanmakuSourceSheet(
         bangumiId: bangumiId,
+        episodeNumber: episodeNumber,
+        rememberSelection: rememberSelection,
         initialKeyword: initialKeyword,
         danmakuController: danmakuController,
         onBeforeApply: onBeforeApply,
@@ -81,12 +86,16 @@ enum _SourceStep { search, anime, episode }
 class _DanmakuSourceSheet extends StatefulWidget {
   const _DanmakuSourceSheet({
     required this.bangumiId,
+    required this.episodeNumber,
+    required this.rememberSelection,
     required this.initialKeyword,
     required this.danmakuController,
     required this.onBeforeApply,
   });
 
   final int bangumiId;
+  final int episodeNumber;
+  final bool rememberSelection;
   final String initialKeyword;
   final PlayerDanmakuController danmakuController;
   final VoidCallback onBeforeApply;
@@ -214,9 +223,26 @@ class _DanmakuSourceSheetState extends State<_DanmakuSourceSheet> {
           .getDanDanmakuByEpisodeID(episode.episodeId);
       if (!mounted) return;
       widget.danmakuController.setDanmakuEnabled(hasDanmakus);
+      var saved = false;
+      if (hasDanmakus && widget.rememberSelection &&
+          !GStorage.getSetting(SettingsKeys.privateMode)) {
+        try {
+          await ManualDanmakuLinkStore.save(
+            widget.bangumiId, widget.episodeNumber, episode.episodeId,
+          );
+          saved = true;
+        } catch (error) {
+          KazumiLogger().w('Danmaku source link not saved', error: error);
+        }
+      }
+      if (!mounted) return;
       KazumiDialog.dismiss(context: context);
       KazumiDialog.showToast(
-        message: hasDanmakus ? '已切换弹幕源' : '暂无弹幕',
+        message: !hasDanmakus
+            ? '暂无弹幕'
+            : saved
+                ? '已切换并记住当前分集弹幕'
+                : '已切换弹幕源',
       );
     } catch (_) {
       if (!mounted) return;
@@ -382,6 +408,31 @@ class _DanmakuSourceSheetState extends State<_DanmakuSourceSheet> {
             ),
           ),
         ),
+        if (widget.rememberSelection &&
+            ManualDanmakuLinkStore.lookup(
+                  widget.bangumiId, widget.episodeNumber) != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () async {
+                  try {
+                    await ManualDanmakuLinkStore.clear(
+                      widget.bangumiId, widget.episodeNumber,
+                    );
+                    if (mounted) setState(() {});
+                    KazumiDialog.showToast(message: '已清除记忆，下次播放自动匹配');
+                  } catch (error) {
+                    KazumiLogger().w('Danmaku link clear failed', error: error);
+                    KazumiDialog.showToast(message: '清除失败');
+                  }
+                },
+                icon: const Icon(Icons.link_off_outlined),
+                label: const Text('清除当前分集的弹幕关联'),
+              ),
+            ),
+          ),
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
