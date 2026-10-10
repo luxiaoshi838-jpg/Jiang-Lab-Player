@@ -11,7 +11,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
-import platform
 import re
 import shutil
 import subprocess
@@ -169,6 +168,15 @@ def build(keys: Path, output_dir: Path) -> Path:
         try:
             environment = os.environ.copy()
             environment["SUIBO_PRIVATE_STOREPASS"] = secrets[0]
+            environment["SUIBO_PRIVATE_KEYPASS"] = secrets[1]
+            # Verify the private-key password too, not only the JKS store.
+            run_safe([
+                keytool, "-certreq", "-alias", credentials["key alias"],
+                "-keystore", str(keystore),
+                "-storepass:env", "SUIBO_PRIVATE_STOREPASS",
+                "-keypass:env", "SUIBO_PRIVATE_KEYPASS",
+                "-file", str(Path(temporary) / "verification.csr"),
+            ], cwd=ROOT, environment=environment, redactions=secrets)
             keytool_output = run_safe([
                 keytool, "-list", "-v", "-keystore", str(keystore),
                 "-alias", credentials["key alias"],
@@ -205,13 +213,11 @@ def build(keys: Path, output_dir: Path) -> Path:
             version_code, version_name = package.group(2), package.group(3)
             safe_version = re.sub(r"[^A-Za-z0-9_.-]", "_", version_name)
             destination = output_dir / f"Suibo-Android-{safe_version}-{version_code}-release.apk"
-            if destination.exists():
-                raise RuntimeError("Signed release filename exists; refusing overwrite")
+            report = output_dir / f"Suibo-Android-signing-report-{version_code}.txt"
+            if destination.exists() or report.exists():
+                raise RuntimeError("Version already exists in private output; refusing overwrite")
             shutil.copy2(candidate, destination)
             digest = hashlib.sha256(destination.read_bytes()).hexdigest()
-            report = output_dir / f"Suibo-Android-signing-report-{version_code}.txt"
-            if report.exists():
-                raise RuntimeError("Signing report exists; refusing overwrite")
             report.write_text(
                 "\n".join([
                     "Suibo private Android release verification",
