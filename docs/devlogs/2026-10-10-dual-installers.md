@@ -27,3 +27,11 @@
 
 ## 公开仓库安全纪律
 - 只提交源代码、配置、测试、日志。**禁止上传 APK、EXE、JKS、key.properties、明文密码和签名 ZIP**。
+
+## 2026-10-10 实际构建与交付审计
+- Windows Inno Setup 编译已在 Windows GitHub 构建机实际成功，2.3.8→2.3.9 静默覆盖安装及 Flutter 运行依赖存在性检测执行成功。
+- 公开 CI 的静默卸载检查尚未最终通过，已修正为等待卸载进程并获取详细日志；不能将其称为安装器全验收通过。
+- 为在聊天中交付安装包，曾尝试只在用户私有构建仓库的隔离临时分支生成短期产物，不修改其主分支、不上传原始 JKS。
+- Windows 私有构建编译出完整 EXE，但上传至私有 Actions Artifact 时遭遇账户存储配额耗尽（Failed to CreateArtifact），因此二进制未能传输到聊天文件系统。
+- Android 私有 Release 首轮在 GitHub Linux Runner 因 SDK/NDK 占满磁盘失败（No space left on device）；已改为清理无关预装组件后重建 arm64 Release，随后应在本地使用原始 JKS 正式重新签名并验证指纹。
+- 在没有经过文件传输、最终签名验证及实际文件存在性检查之前，不得提供伪造的 APK/EXE 下载链接或声称成品已交付。
