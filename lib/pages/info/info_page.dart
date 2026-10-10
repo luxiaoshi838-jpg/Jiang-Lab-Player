@@ -69,6 +69,7 @@ class _InfoPageState extends State<InfoPage>
       infoController.isLoading || _showBangumiInfoSkeleton;
 
   bool _needsBangumiInfoRefresh(BangumiItem bangumiItem) {
+    if (bangumiItem.isExternal) return false;
     final votesCount = bangumiItem.votesCount;
     final missingVoteDistribution =
         votesCount.isEmpty || bangumiItem.votes <= 0 || votesCount.length < 10;
@@ -76,6 +77,10 @@ class _InfoPageState extends State<InfoPage>
   }
 
   Future<void> loadCharacters() async {
+    if (infoController.bangumiItem.isExternal) {
+      if (mounted) setState(() { charactersIsEmpty = true; });
+      return;
+    }
     if (charactersIsLoading) return;
     setState(() {
       charactersIsLoading = true;
@@ -105,6 +110,10 @@ class _InfoPageState extends State<InfoPage>
   }
 
   Future<void> loadStaff() async {
+    if (infoController.bangumiItem.isExternal) {
+      if (mounted) setState(() { staffIsEmpty = true; });
+      return;
+    }
     if (staffIsLoading) return;
     setState(() {
       staffIsLoading = true;
@@ -134,6 +143,7 @@ class _InfoPageState extends State<InfoPage>
   }
 
   Future<void> loadRelations() async {
+    if (infoController.bangumiItem.isExternal) return;
     try {
       await infoController
           .queryBangumiRelationsByID(infoController.bangumiItem.id);
@@ -143,6 +153,10 @@ class _InfoPageState extends State<InfoPage>
   }
 
   Future<void> loadMoreComments({bool loadMore = false}) async {
+    if (infoController.bangumiItem.isExternal) {
+      if (mounted) setState(() { commentsHasLoaded = true; });
+      return;
+    }
     if (commentsIsLoading) return;
     setState(() {
       commentsIsLoading = true;
@@ -170,6 +184,7 @@ class _InfoPageState extends State<InfoPage>
   }
 
   Future<void> _openReviewEditor() async {
+    if (infoController.bangumiItem.isExternal) return;
     final token =
         GStorage.getSetting(SettingsKeys.bangumiAccessToken).toString().trim();
     if (token.isEmpty) {
@@ -210,7 +225,13 @@ class _InfoPageState extends State<InfoPage>
     infoController.staffList.clear();
     infoController.clearRelations();
     infoController.pluginSearchResponseList.clear();
-    if (_needsBangumiInfoRefresh(infoController.bangumiItem)) {
+    if (infoController.bangumiItem.isExternal) {
+      // These metadata endpoints only exist for Bangumi subjects.
+      commentsHasLoaded = true;
+      charactersIsEmpty = true;
+      staffIsEmpty = true;
+      infoController.relationsHasLoaded = true;
+    } else if (_needsBangumiInfoRefresh(infoController.bangumiItem)) {
       _showBangumiInfoSkeleton = true;
       _loadBangumiInfo();
     }
@@ -244,6 +265,7 @@ class _InfoPageState extends State<InfoPage>
   }
 
   Future<void> onCommentsTabSelected() async {
+    if (infoController.bangumiItem.isExternal) return;
     final interest = infoController.bangumiItem.interest;
     final token =
         GStorage.getSetting(SettingsKeys.bangumiAccessToken).toString().trim();
