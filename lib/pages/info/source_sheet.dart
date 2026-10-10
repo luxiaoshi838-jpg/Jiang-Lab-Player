@@ -64,6 +64,18 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
       onCancelled: (plugin) => _retry(plugin.name),
     );
     _searchService.queryAllSource(_keyword);
+    // A rule-only title carries the exact previously discovered source URL.
+    // Display it immediately so a bookshelf entry can be reopened even
+    // when a later keyword search returns a different result.
+    if (item.isExternal &&
+        _pluginsController.pluginList.any((p) => p.name == item.sourcePlugin)) {
+      widget.infoController.pluginSearchResponseList.add(
+        PluginSearchResponse(
+          pluginName: item.sourcePlugin,
+          data: [SearchItem(name: _keyword, src: item.sourceUrl)],
+        ),
+      );
+    }
   }
 
   @override
