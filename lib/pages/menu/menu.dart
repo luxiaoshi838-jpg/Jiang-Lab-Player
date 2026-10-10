@@ -147,11 +147,6 @@ class _ScaffoldMenu extends State<ScaffoldMenu> with RouteAware {
             label: '推荐',
           ),
           NavigationDestination(
-            selectedIcon: Icon(Icons.movie),
-            icon: Icon(Icons.movie_outlined),
-            label: '影视',
-          ),
-          NavigationDestination(
             selectedIcon: Icon(Icons.timeline),
             icon: Icon(Icons.timeline_outlined),
             label: '时间表',
@@ -198,11 +193,6 @@ class _ScaffoldMenu extends State<ScaffoldMenu> with RouteAware {
                   selectedIcon: Icon(Icons.home),
                   icon: Icon(Icons.home_outlined),
                   label: Text('推荐'),
-                ),
-                NavigationRailDestination(
-                  selectedIcon: Icon(Icons.movie),
-                  icon: Icon(Icons.movie_outlined),
-                  label: Text('影视'),
                 ),
                 NavigationRailDestination(
                   selectedIcon: Icon(Icons.timeline),
