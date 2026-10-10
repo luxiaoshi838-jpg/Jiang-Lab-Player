@@ -13,7 +13,7 @@ import 'package:kazumi/plugins/plugins_controller.dart';
 import 'package:kazumi/utils/search_parser.dart';
 import 'package:kazumi/services/video_source/video_catalog_scope.dart';
 import 'package:kazumi/services/video_source/public_video_catalog.dart';
-import 'package:kazumi/services/video_source/tmdb_catalog_service.dart';
+import 'package:kazumi/services/video_source/tvmaze_catalog_service.dart';
 
 part 'search_controller.g.dart';
 
@@ -144,30 +144,6 @@ abstract class _SearchPageController with Store {
       await _appendRuleResults(filterState.keyword.trim(), generation);
     }
     if (generation != _searchGeneration) return;
-    // TMDB supplies movie/TV/variety metadata only when the user has
-    // configured a read-only token. Preserve Bangumi's original subjects and
-    // prefer already-found rule/subject items for the same localized title.
-    if (type != 'add' &&
-        filterState.keyword.trim().isNotEmpty &&
-        !filterState.hasAdvancedFilters) {
-      final tmdb = await TmdbCatalogService.search(filterState.keyword.trim());
-      if (generation != _searchGeneration) return;
-      final titles = <String>{
-        for (final existing in bangumiList)
-          existing.nameCn.trim().toLowerCase(),
-        for (final existing in bangumiList)
-          existing.name.trim().toLowerCase(),
-      };
-      final ids = bangumiList.map((e) => e.id).toSet();
-      for (final item in tmdb) {
-        final localized = item.nameCn.trim().toLowerCase();
-        if (localized.isEmpty ||
-            !titles.add(localized) ||
-            !ids.add(item.id)) continue;
-        bangumiList.add(item);
-      }
-    }
-    if (generation != _searchGeneration) return;
     // Bangumi is not a complete index of documentaries, reality TV or VOD.
     // The fallback is verified *metadata*, never an invented stream URL.
     if (type != 'add' &&
@@ -182,6 +158,24 @@ abstract class _SearchPageController with Store {
       if (item != null &&
           !bangumiList.any((existing) => existing.id == item.id)) {
         bangumiList.add(item);
+      }
+    }
+    // TVmaze is a second keyless metadata provider. It covers TV programmes
+    // missed by Bangumi/Wikipedia, but only exact-title matches are added.
+    // Video streams continue to come exclusively from installed rules.
+    if (type != 'add' &&
+        filterState.keyword.trim().isNotEmpty &&
+        !filterState.hasAdvancedFilters &&
+        !bangumiList.any((item) =>
+            TvmazeCatalogService.normalizeTitle(item.name) ==
+                TvmazeCatalogService.normalizeTitle(filterState.keyword) ||
+            TvmazeCatalogService.normalizeTitle(item.nameCn) ==
+                TvmazeCatalogService.normalizeTitle(filterState.keyword))) {
+      final extras = await TvmazeCatalogService.search(filterState.keyword);
+      if (generation != _searchGeneration) return;
+      final known = bangumiList.map((item) => item.id).toSet();
+      for (final item in extras) {
+        if (known.add(item.id)) bangumiList.add(item);
       }
     }
     if (generation != _searchGeneration) return;

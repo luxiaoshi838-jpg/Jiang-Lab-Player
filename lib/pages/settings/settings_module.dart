@@ -12,7 +12,6 @@ import 'package:kazumi/pages/settings/download_settings.dart';
 import 'package:kazumi/pages/settings/interface_settings.dart';
 import 'package:kazumi/pages/settings/keyboard_settings.dart';
 import 'package:kazumi/pages/settings/player_settings.dart';
-import 'package:kazumi/pages/settings/video_catalog_settings.dart';
 import 'package:kazumi/pages/settings/proxy/proxy_module.dart';
 import 'package:kazumi/pages/settings/renderer_settings.dart';
 import 'package:kazumi/pages/settings/settings_page.dart';
@@ -62,8 +61,6 @@ final settingsModule = createModule(
             '/keyboard',
             child: (context, state) => const KeyboardSettingsPage(),
           )
-          ..route('/video-catalog',
-              child: (context, state) => const VideoCatalogSettingsPage())
           ..route('/player',
               child: (context, state) => const PlayerSettingsPage())
           ..route(

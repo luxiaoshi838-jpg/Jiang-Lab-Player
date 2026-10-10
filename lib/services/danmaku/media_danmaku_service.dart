@@ -55,7 +55,6 @@ class MediaDanmakuService {
     required String title,
     required int episode,
     required Iterable<String> pageUrls,
-    int? tmdbId,
   }) async {
     // Native CID is an exact identity for a single Bilibili video page.
     for (final url in pageUrls) {
@@ -69,27 +68,6 @@ class MediaDanmakuService {
             error: error);
       }
       break;
-    }
-
-    // TMDB IDs can match multiple season-specific comment libraries.
-    // Only auto-load if precisely one distinct library matches; ambiguous
-    // series must be selected using the untouched manual source picker.
-    if (tmdbId != null && tmdbId > 0) {
-      try {
-        final response = await DanmakuApi.searchByTmdbId(tmdbId, episode);
-        final unique = {for (final anime in response.animes) anime.animeId};
-        if (response.hasMore || unique.length != 1) return null;
-        final id = unique.single;
-        final info = await DanmakuApi.getDanDanEpisodesByDanDanBangumiID(id);
-        if (episode < 1 || episode > info.episodes.length) return null;
-        final episodeId = info.episodes[episode - 1].episodeId;
-        final entries = await DanmakuApi.getDanDanmakuByEpisodeID(episodeId);
-        return entries.isEmpty ? null : MediaDanmakuMatch(entries, dandanId: id);
-      } catch (error) {
-        KazumiLogger().w('MediaDanmaku: TMDB mapping unavailable',
-            error: error);
-        return null;
-      }
     }
 
     // Fallback requires exactly one strictly identical work title. Never

@@ -13,7 +13,6 @@ import 'package:kazumi/services/download/download_manager.dart';
 import 'package:kazumi/services/video_source/services.dart';
 import 'package:kazumi/services/video_source/direct_video_source.dart';
 import 'package:kazumi/services/danmaku/media_danmaku_service.dart';
-import 'package:kazumi/services/video_source/tmdb_catalog_service.dart';
 import 'package:kazumi/pages/player/controller/player_danmaku_controller.dart';
 import 'package:kazumi/bean/dialog/dialog_helper.dart';
 import 'package:mobx/mobx.dart';
@@ -571,7 +570,6 @@ abstract class _VideoPageController with Store implements Disposable {
                 : bangumiItem.name,
             episode: params.danmakuEpisodeNumber,
             pageUrls: [params.pageUrl, src, bangumiItem.sourceUrl],
-            tmdbId: TmdbCatalogService.tmdbIdFromItem(bangumiItem),
           );
           result = DanmakuLoadResult.success(
             danmakus: matched?.entries ?? const [],
