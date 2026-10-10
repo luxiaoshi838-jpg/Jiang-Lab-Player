@@ -121,7 +121,9 @@ class CollectSyncMerger {
     required BangumiSyncPriority priority,
   }) {
     final localMap = {
-      for (final item in localCollectibles) item.bangumiItem.id: item,
+      for (final item in localCollectibles)
+        if (!item.bangumiItem.isExternal && item.bangumiItem.type == 2)
+          item.bangumiItem.id: item,
     };
     final remoteMap = <int, BangumiCollection>{};
     for (final item in remoteCollections) {
