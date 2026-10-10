@@ -6,6 +6,37 @@ import 'package:kazumi/modules/collect/collect_sync_merger.dart';
 import 'package:kazumi/modules/collect/collect_type.dart';
 
 void main() {
+  test('live-action subjects without ratings or covers remain searchable', () {
+    final movie = BangumiItem.fromJson({
+      'id': 872345,
+      'type': 6,
+      'name': '示例电视剧',
+      'name_cn': '示例电视剧',
+      'summary': '用于解析测试',
+      'rating': null,
+      'images': null,
+    });
+    expect(movie.nameCn, '示例电视剧');
+    expect(movie.type, 6);
+    expect(movie.ratingScore, 0);
+    expect(movie.votesCount, isEmpty);
+    expect(movie.images, isEmpty);
+    expect(movie.isExternal, false);
+  });
+
+  test('sparse three-dimensional subjects parse partial rating fields', () {
+    final item = BangumiItem.fromJson({
+      'id': 827654,
+      'type': 6,
+      'name': '示例电影',
+      'rating': {'score': 7.3},
+      'images': {'large': 'https://example.org/movie.jpg', 'grid': null},
+    });
+    expect(item.rank, 0);
+    expect(item.ratingScore, 7.3);
+    expect(item.votes, 0);
+    expect(item.images['large'], 'https://example.org/movie.jpg');
+  });
   test('rule-only media has stable Hive-compatible ID and replay location', () {
     final movie = BangumiItem.fromRule(
       pluginName: 'demo-rule', source: 'https://example.org/movie/1',
