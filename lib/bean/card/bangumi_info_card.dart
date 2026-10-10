@@ -276,6 +276,8 @@ class _BangumiInfoCardVState extends State<BangumiInfoCardV> {
                   ),
                 ),
                 if (widget.showRating &&
+                    widget.bangumiItem.votes > 0 &&
+                    widget.bangumiItem.votesCount.length >= 10 &&
                     MediaQuery.sizeOf(context).width >=
                         LayoutBreakpoint.compact['width']! &&
                     !widget.isLoading)
