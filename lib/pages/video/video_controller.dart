@@ -248,7 +248,7 @@ abstract class _VideoPageController with Store implements Disposable {
     final preferredDisplayRoad =
         _offlineOriginalRoadToDisplayRoad[preferredOriginalRoad];
     final roadIndices = <int>[
-      if (preferredDisplayRoad != null) preferredDisplayRoad,
+      ?preferredDisplayRoad,
       for (var i = 0; i < roadList.length; i++)
         if (i != preferredDisplayRoad) i,
     ];
@@ -569,6 +569,8 @@ abstract class _VideoPageController with Store implements Disposable {
                 ? bangumiItem.nameCn
                 : bangumiItem.name,
             episode: params.danmakuEpisodeNumber,
+            episodeTitle: params.episodeTitle,
+            titleAliases: [bangumiItem.nameCn, bangumiItem.name],
             pageUrls: [params.pageUrl, src, bangumiItem.sourceUrl],
           );
           result = DanmakuLoadResult.success(
@@ -600,6 +602,8 @@ abstract class _VideoPageController with Store implements Disposable {
                 ? bangumiItem.nameCn
                 : bangumiItem.name,
             episode: params.danmakuEpisodeNumber,
+            episodeTitle: params.episodeTitle,
+            titleAliases: [bangumiItem.nameCn, bangumiItem.name],
             pageUrls: [params.pageUrl, src],
           );
           if (matched != null && matched.entries.isNotEmpty) {

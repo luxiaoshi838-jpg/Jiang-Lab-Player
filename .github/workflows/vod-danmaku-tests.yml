@@ -1,0 +1,28 @@
+name: VOD danmaku regression
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: vod-danmaku-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  danmaku:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+          cache: true
+      - name: Resolve packages
+        run: flutter pub get
+      - name: Run VOD matching regression
+        run: flutter test test/services/danmaku/media_danmaku_match_test.dart
+      - name: Analyze touched Dart files
+        run: flutter analyze lib/services/danmaku/media_danmaku_service.dart lib/pages/video/video_controller.dart lib/pages/player/danmaku_source_sheet.dart test/services/danmaku/media_danmaku_match_test.dart
