@@ -132,7 +132,7 @@ class _DanmakuSourceSheetState extends State<_DanmakuSourceSheet> {
   Future<void> _searchAnime() async {
     final keyword = _keywordController.text.trim();
     if (keyword.isEmpty) {
-      setState(() => _error = '请输入番剧名称');
+      setState(() => _error = '请输入作品名称');
       return;
     }
 
@@ -164,7 +164,7 @@ class _DanmakuSourceSheetState extends State<_DanmakuSourceSheet> {
         _loading = false;
         _animes = response.animes;
         _hasMore = response.hasMore;
-        if (response.animes.isEmpty) _error = '未找到番剧';
+        if (response.animes.isEmpty) _error = '未找到作品';
       });
     } catch (error) {
       KazumiLogger().w('Danmaku source search failed', error: error);
@@ -369,7 +369,7 @@ class _DanmakuSourceSheetState extends State<_DanmakuSourceSheet> {
               textInputAction: TextInputAction.search,
               onSubmitted: (_) => _searchAnime(),
               decoration: InputDecoration(
-                hintText: '番剧名称',
+                hintText: '作品名称',
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: value.text.isEmpty
                     ? null
@@ -508,7 +508,7 @@ class _DanmakuSourceSheetState extends State<_DanmakuSourceSheet> {
         icon: Icons.subtitles_off_outlined,
         title: _error!,
         errMsg: '',
-        actions: [StateActionButton.tonal(onPressed: _goBack, text: '返回番剧')],
+        actions: [StateActionButton.tonal(onPressed: _goBack, text: '返回作品')],
       );
     }
     final visible = _visibleEpisodes;
@@ -585,7 +585,7 @@ class _SheetHeader extends StatelessWidget {
 
   String get title => switch (step) {
         _SourceStep.search => '选择弹幕源',
-        _SourceStep.anime => '选择番剧',
+        _SourceStep.anime => '选择作品',
         _SourceStep.episode => '选择分集',
       };
 
