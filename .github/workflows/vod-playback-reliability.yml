@@ -1,0 +1,19 @@
+name: VOD source reliability
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter test test/services/video_source/video_source_failure_test.dart test/services/video_source/media_work_index_test.dart test/suibo_unified_media_test.dart
+      - run: flutter analyze lib/services/video_source/video_source_failure.dart lib/services/plugin/plugin_search_service.dart lib/pages/info/source_sheet.dart lib/pages/video/video_controller.dart test/services/video_source/video_source_failure_test.dart
