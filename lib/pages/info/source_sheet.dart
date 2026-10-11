@@ -24,6 +24,7 @@ import 'package:kazumi/plugins/plugins_controller.dart';
 import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/services/video_source/video_source_failure.dart';
 import 'package:kazumi/services/video_source/direct_video_source.dart';
+import 'package:kazumi/services/video_source/video_catalog_scope.dart';
 import 'package:kazumi/services/video_source/official_video_search.dart';
 import 'package:kazumi/services/plugin/captcha_verification_service.dart';
 import 'package:kazumi/services/plugin/plugin_search_service.dart';
@@ -49,6 +50,30 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
   final CollectController _collectController = inject<CollectController>();
   final PluginsController _pluginsController = inject<PluginsController>();
   final Map<String, String> _sourceKeywords = {};
+  bool _includeAnimeRules = false;
+
+  bool get _isDrama => isConfirmedDramaCatalogue(
+      widget.infoController.bangumiItem.type,
+      widget.infoController.bangumiItem.sourcePlugin);
+
+  List<Plugin> get _eligiblePlugins =>
+      _pluginsController.pluginList
+          .where((p) => !isLiveOnlyRule(p.type) &&
+              (!_isDrama || _includeAnimeRules ||
+                  isRelevantRuleTypeForDrama(p.type)))
+          .toList(growable: false);
+
+  int get _hiddenAnimeCount => !_isDrama || _includeAnimeRules
+      ? 0
+      : _pluginsController.pluginList
+          .where((p) => p.type.trim().toLowerCase() == 'anime')
+          .length;
+
+  void _showAndSearchAnimeRules() {
+    if (_includeAnimeRules || !mounted) return;
+    setState(() => _includeAnimeRules = true);
+    _searchService.queryAllSource(_keyword, selectedPlugins: _eligiblePlugins);
+  }
 
   late final String _keyword;
   late final PluginSearchService _searchService;
@@ -67,7 +92,7 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
       onVerified: _showVerifiedResult,
       onCancelled: (plugin) => _retry(plugin.name),
     );
-    _searchService.queryAllSource(_keyword);
+    _searchService.queryAllSource(_keyword, selectedPlugins: _eligiblePlugins);
     // Preserve all rule URLs discovered during unified search. The live
     // source lookup may replace its response later; this snapshot remains
     // visible, deduplicated by URL in the source sheet.
@@ -247,7 +272,7 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
         builder: (context) {
           // Snapshot observable values here; lazy list builders are not tracked.
           final groupsByName = {
-            for (final plugin in _pluginsController.pluginList)
+            for (final plugin in _eligiblePlugins)
               plugin.name: _SourceSearchGroup(
                 name: plugin.name,
                 keyword: _keywordFor(plugin.name),
@@ -273,6 +298,8 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
           return _SourceSheetView(
             keyword: _keyword,
             groups: groupsByName.values.toList(),
+            hiddenAnimeCount: _hiddenAnimeCount,
+            onSearchAnimeRules: _showAndSearchAnimeRules,
             firstResultSource: firstResultSource,
             onSourceSearch: _showCustomKeyword,
             onSourceAliasSearch: _showAliasPicker,
