@@ -41,10 +41,10 @@ def main():
       content_type=img.headers.get("content-type","")
       status=img.status
     if status!=200 or len(image_bytes)<16 or not (
-      image_bytes.startswith(b"\\xff\\xd8\\xff") or
-      image_bytes.startswith(b"\\x89PNG") or
+      image_bytes.startswith(bytes.fromhex("ffd8ff")) or
+      image_bytes.startswith(bytes.fromhex("89504e47")) or
       image_bytes.startswith(b"RIFF") or
-      image_bytes.startswith(b"\\x00\\x00\\x00")
+      image_bytes.startswith(bytes.fromhex("000000"))
     ):
       raise RuntimeError("Official poster URL did not return an image")
     print("POSTER HTTP",status,"content-type",content_type)
