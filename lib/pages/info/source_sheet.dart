@@ -72,7 +72,21 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
   void _showAndSearchAnimeRules() {
     if (_includeAnimeRules || !mounted) return;
     setState(() => _includeAnimeRules = true);
-    _searchService.queryAllSource(_keyword, selectedPlugins: _eligiblePlugins);
+    // Preserve any confirmed VOD results and bookmarked direct URLs: do not
+    // clear/re-run the whole result list just to include legacy anime rules.
+    final legacy = _pluginsController.pluginList
+        .where((p) => p.type.trim().toLowerCase() == 'anime')
+        .toList(growable: false);
+    unawaited(_searchExtraAnimeRules(legacy));
+  }
+
+  Future<void> _searchExtraAnimeRules(List<Plugin> plugins) async {
+    for (var start = 0; start < plugins.length; start += 4) {
+      if (!mounted) return;
+      await Future.wait(plugins.skip(start).take(4).map(
+        (plugin) => _searchService.querySource(_keyword, plugin.name),
+      ));
+    }
   }
 
   late final String _keyword;
