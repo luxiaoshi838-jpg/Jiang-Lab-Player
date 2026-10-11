@@ -37,6 +37,8 @@ class _SourceSheetView extends StatefulWidget {
   const _SourceSheetView({
     required this.keyword,
     required this.groups,
+    required this.hiddenAnimeCount,
+    required this.onSearchAnimeRules,
     required this.firstResultSource,
     required this.onSourceSearch,
     required this.onSourceAliasSearch,
@@ -52,6 +54,8 @@ class _SourceSheetView extends StatefulWidget {
 
   final String keyword;
   final List<_SourceSearchGroup> groups;
+  final int hiddenAnimeCount;
+  final VoidCallback onSearchAnimeRules;
   final String? firstResultSource;
   final ValueChanged<String> onSourceSearch;
   final ValueChanged<String> onSourceAliasSearch;
@@ -152,6 +156,26 @@ class _SourceSheetViewState extends State<_SourceSheetView> {
               child: CustomScrollView(
                 controller: _scrollController,
                 slivers: [
+                  if (widget.hiddenAnimeCount > 0)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 10, 20, 6),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '这是一部影视作品，已暂时跳过 ${widget.hiddenAnimeCount} 个动漫专用来源',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: widget.onSearchAnimeRules,
+                              child: const Text('也搜索动漫来源'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   if (pending == 0 && resultCount == 0)
                     SliverToBoxAdapter(
                       child: Padding(
