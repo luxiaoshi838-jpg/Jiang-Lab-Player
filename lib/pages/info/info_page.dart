@@ -22,6 +22,8 @@ import 'package:kazumi/pages/info/rating_review_dialog.dart';
 import 'package:kazumi/pages/info/source_sheet.dart';
 import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/services/video_source/bangumi_real_catalog.dart';
+import 'package:kazumi/services/video_source/official_video_search.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:kazumi/services/platform/desktop_window_config.dart';
 import 'package:kazumi/services/storage/storage.dart';
 import 'package:kazumi/utils/device.dart';
@@ -362,6 +364,11 @@ class _InfoPageState extends State<InfoPage>
 
   @override
   Widget build(BuildContext context) {
+    final title = infoController.bangumiItem.nameCn.isEmpty
+        ? infoController.bangumiItem.name
+        : infoController.bangumiItem.nameCn;
+    final officialProgramme = OfficialVideoSearch.knownProgramme(
+      title, infoController.bangumiItem.airDate);
     final showWindowButton = DesktopWindowConfig.showWindowButton;
     final topOffset = Platform.isMacOS && showWindowButton ? 22.0 : 0.0;
     return Scaffold(
@@ -499,7 +506,32 @@ class _InfoPageState extends State<InfoPage>
           );
         }),
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (officialProgramme != null) ...[
+            OutlinedButton.icon(
+              onPressed: () async {
+                try {
+                  final opened = await launchUrl(
+                    officialProgramme.url,
+                    mode: LaunchMode.externalApplication,
+                  );
+                  if (opened) return;
+                } catch (error) {
+                  KazumiLogger().w('InfoPage: official provider unavailable',
+                      error: error);
+                }
+                if (mounted) {
+                  KazumiDialog.showToast(message: '无法打开爱奇艺剧集页，请检查浏览器');
+                }
+              },
+              icon: const Icon(Icons.open_in_new, size: 18),
+              label: Text(isDesktop() ? '爱奇艺正版剧集页' : '爱奇艺剧集'),
+            ),
+            const SizedBox(width: 10),
+          ],
+          FloatingActionButton.extended(
         tooltip: infoController.bangumiItem.isExternal &&
                 (infoController.bangumiItem.sourcePlugin == '百科影视目录' ||
                  infoController.bangumiItem.sourcePlugin == 'TVmaze节目目录') &&
@@ -522,6 +554,8 @@ class _InfoPageState extends State<InfoPage>
             ? '查找播放来源'
             : '开始观看'),
         icon: const Icon(Icons.play_arrow_rounded),
+          ),
+        ],
       ),
     );
   }
