@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
@@ -20,6 +21,7 @@ import 'package:kazumi/pages/info/info_tabview.dart';
 import 'package:kazumi/pages/info/rating_review_dialog.dart';
 import 'package:kazumi/pages/info/source_sheet.dart';
 import 'package:kazumi/services/logging/logger.dart';
+import 'package:kazumi/services/video_source/bangumi_real_catalog.dart';
 import 'package:kazumi/services/platform/desktop_window_config.dart';
 import 'package:kazumi/services/storage/storage.dart';
 import 'package:kazumi/utils/device.dart';
@@ -238,6 +240,36 @@ class _InfoPageState extends State<InfoPage>
     infoTabController = TabController(length: _infoTabs.length, vsync: this);
     showRating = GStorage.getSetting(SettingsKeys.showRating);
     infoTabController.addListener(onInfoTabChanged);
+    if (infoController.bangumiItem.isExternal &&
+        (infoController.bangumiItem.sourcePlugin == '百科影视目录' ||
+         infoController.bangumiItem.sourcePlugin == 'TVmaze节目目录')) {
+      unawaited(_upgradeOldCatalogEntry());
+    }
+  }
+
+  /// Previously saved encyclopedia entries remain in Hive. On opening one,
+  /// recover real Bangumi TV metadata (including cover) when available.
+  Future<void> _upgradeOldCatalogEntry() async {
+    final old = infoController.bangumiItem;
+    final title = old.nameCn.isEmpty ? old.name : old.nameCn;
+    final actual = await BangumiRealCatalog.findExact(title);
+    if (!mounted || !identical(infoController.bangumiItem, old) ||
+        actual == null) return;
+    for (final source in old.discoveredSources) {
+      if (!actual.discoveredSources.any((x) => x.identity == source.identity)) {
+        actual.discoveredSources.add(source);
+      }
+    }
+    setState(() {
+      infoController.bangumiItem = actual;
+      commentsHasLoaded = false;
+      charactersIsEmpty = false;
+      staffIsEmpty = false;
+      infoController.relationsHasLoaded = false;
+    });
+    if (_needsBangumiInfoRefresh(actual)) {
+      unawaited(_loadBangumiInfo());
+    }
   }
 
   void onInfoTabChanged() {
