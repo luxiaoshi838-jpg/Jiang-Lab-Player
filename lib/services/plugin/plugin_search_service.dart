@@ -58,12 +58,13 @@ class PluginSearchService {
     return false;
   }
 
-  Future<void> queryAllSource(String keyword) async {
+  Future<void> queryAllSource(String keyword, {List<Plugin>? selectedPlugins}) async {
     infoController.pluginSearchResponseList.clear();
     infoController.pluginSearchStatus.clear();
     infoController.pluginSearchFailureHints.clear();
 
-    final plugins = List<Plugin>.of(pluginsController.pluginList);
+    final plugins = List<Plugin>.of(
+        selectedPlugins ?? pluginsController.pluginList);
     for (final plugin in plugins) {
       infoController.pluginSearchStatus[plugin.name] =
           PluginSearchStatus.pending;
