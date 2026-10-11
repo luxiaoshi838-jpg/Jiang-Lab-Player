@@ -44,6 +44,8 @@ class _SourceSheetView extends StatefulWidget {
     required this.onVerify,
     required this.onOpenBrowser,
     required this.onOpenOfficialPlatform,
+    required this.onOpenVerifiedOfficialProgramme,
+    required this.programmeDate,
     required this.onPlay,
     required this.onClose,
   });
@@ -57,6 +59,8 @@ class _SourceSheetView extends StatefulWidget {
   final ValueChanged<String> onVerify;
   final ValueChanged<String> onOpenBrowser;
   final ValueChanged<OfficialVideoPlatform> onOpenOfficialPlatform;
+  final ValueChanged<Uri> onOpenVerifiedOfficialProgramme;
+  final String programmeDate;
   final void Function(String sourceName, SearchItem result) onPlay;
   final VoidCallback onClose;
 
@@ -160,6 +164,18 @@ class _SourceSheetViewState extends State<_SourceSheetView> {
                               style: Theme.of(context).textTheme.bodyMedium,
                             ),
                             const SizedBox(height: 12),
+                            if (OfficialVideoSearch.knownProgramme(
+                                  widget.keyword, widget.programmeDate)
+                                case final known?)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: OutlinedButton.icon(
+                                  onPressed: () =>
+                                      widget.onOpenVerifiedOfficialProgramme(known.url),
+                                  icon: const Icon(Icons.open_in_new, size: 16),
+                                  label: Text(known.label),
+                                ),
+                              ),
                             Text('前往正版平台搜索（网站观看，非内置播放结果）',
                                 style: Theme.of(context).textTheme.bodySmall),
                             const SizedBox(height: 8),
