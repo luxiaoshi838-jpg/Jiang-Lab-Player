@@ -126,6 +126,22 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
     );
   }
 
+  Future<void> _openVerifiedOfficialProgramme(Uri url) async {
+    try {
+      if (url.scheme == 'https' &&
+          url.host == 'www.iqiyi.com' &&
+          await launchUrl(url, mode: LaunchMode.externalApplication)) {
+        return;
+      }
+    } catch (error) {
+      KazumiLogger().w('SourceSheet: verified official programme open failed',
+          error: error);
+    }
+    if (mounted) {
+      KazumiDialog.showToast(message: '无法打开正版平台页面，请检查浏览器');
+    }
+  }
+
   Future<void> _openOfficialPlatform(OfficialVideoPlatform platform) async {
     final url = OfficialVideoSearch.searchUrl(platform, _keyword);
     try {
@@ -265,6 +281,8 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
                 _captchaFlow.start(_pluginFor(name), _keywordFor(name)),
             onOpenBrowser: _openInBrowser,
             onOpenOfficialPlatform: _openOfficialPlatform,
+            onOpenVerifiedOfficialProgramme: _openVerifiedOfficialProgramme,
+            programmeDate: widget.infoController.bangumiItem.airDate,
             onPlay: _openSearchItem,
             onClose: () => Navigator.of(context).pop(),
           );
