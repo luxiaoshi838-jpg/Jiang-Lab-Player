@@ -209,6 +209,24 @@ class CmsHomeCatalog {
               }));
               final items = parseItems(data, source, category,
                   subcategory, group['name']!);
+              // Most CMS list endpoints omit vod_class. Fetch the real detail
+              // metadata once per page before deciding a genre has no hits.
+              if (subcategory.isNotEmpty &&
+                  !genreMatches(subcategory, group['name']!) &&
+                  data is Map && data['list'] is List) {
+                final ids = (data['list'] as List).whereType<Map>()
+                    .map((row) => (row['vod_id'] ?? '').toString().trim())
+                    .where((id) => id.isNotEmpty)
+                    .take(20).join(',');
+                if (ids.isNotEmpty) {
+                  final details = await _readJson(http,
+                      _withQuery(source.baseUrl, {
+                    'ac': 'videolist', 'ids': ids,
+                  }));
+                  items.addAll(parseItems(details, source, category,
+                      subcategory, group['name']!));
+                }
+              }
               for (final item in items) {
                 final key = item.nameCn.toLowerCase();
                 if (seen.add(key)) { found.add(item); }
