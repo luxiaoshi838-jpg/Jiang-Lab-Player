@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:kazumi/plugins/plugins.dart';
 import 'package:kazumi/services/video_source/default_cms_sources.dart';
+import 'package:kazumi/services/video_source/media_work_index.dart';
 import 'package:kazumi/services/plugin/rule_engine.dart';
 import 'package:kazumi/services/plugin/rule_engine_models.dart';
 import 'package:kazumi/services/video_source/direct_video_source.dart';
@@ -72,7 +73,50 @@ Future<void> main() async {
           ' unavailable: ' + error.runtimeType.toString());
     }
   }
-  throw StateError('No default CMS source returned real title, cover and episodes');
+  throw StateError('No default CMS source returned exact 亮剑 with real poster, episodes and HLS');
+}
+
+/// Confirm that the cover actually serves image bytes, not just a URL.
+Future<bool> _validPoster(String url) async {
+  final uri = Uri.tryParse(url);
+  if (uri == null || uri.scheme != 'https' || uri.userInfo.isNotEmpty ||
+      uri.host.isEmpty) {
+    return false;
+  }
+  final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
+  try {
+    final request = await client.getUrl(uri).timeout(const Duration(seconds: 10));
+    request.headers.set(HttpHeaders.acceptHeader, 'image/*');
+    final response = await request.close().timeout(const Duration(seconds: 10));
+    if (response.statusCode != 200 && response.statusCode != 206) {
+      return false;
+    }
+    if (response.headers.contentType?.primaryType != 'image') {
+      return false;
+    }
+    final bytes = <int>[];
+    await for (final chunk in response.timeout(const Duration(seconds: 10))) {
+      bytes.addAll(chunk.take(16 - bytes.length));
+      if (bytes.length >= 16) break;
+    }
+    final jpeg = bytes.length >= 3 &&
+        bytes[0] == 0xff && bytes[1] == 0xd8 && bytes[2] == 0xff;
+    final png = bytes.length >= 8 &&
+        bytes[0] == 0x89 && bytes[1] == 0x50 &&
+        bytes[2] == 0x4e && bytes[3] == 0x47;
+    final webp = bytes.length >= 12 &&
+        bytes[0] == 0x52 && bytes[1] == 0x49 &&
+        bytes[2] == 0x46 && bytes[3] == 0x46 &&
+        bytes[8] == 0x57 && bytes[9] == 0x45 &&
+        bytes[10] == 0x42 && bytes[11] == 0x50;
+    final gif = bytes.length >= 6 &&
+        bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46;
+    return jpeg || png || webp || gif;
+  } catch (_) {
+    return false;
+  } finally {
+    client.close(force: true);
+  }
 }
 
 Future<bool> _checkOne(Plugin plugin) async {
@@ -97,9 +141,18 @@ Future<bool> _checkOne(Plugin plugin) async {
     logFailures: false,
   );
   final search = await engine.search(config, '亮剑');
-  if (search.response.data.isEmpty) return false;
-  for (final video in search.response.data.where((v) =>
-      v.name.contains('亮剑') && v.imageUrl.isNotEmpty).take(3)) {
+  final exact = search.response.data.where((video) =>
+      MediaWorkIndex.normalizedWorkTitle(video.name) == '亮剑').toList();
+  if (exact.isEmpty) {
+    stdout.writeln('CMS: no exact 亮剑 title among ' +
+        search.response.data.length.toString() + ' search results');
+    return false;
+  }
+  for (final video in exact.where((item) => item.imageUrl.isNotEmpty).take(3)) {
+    if (!await _validPoster(video.imageUrl)) {
+      stderr.writeln('CMS poster failed image-byte verification');
+      continue;
+    }
     try {
       final chapters = await engine.queryChapters(config, video.src);
       for (final road in chapters.roads) {
