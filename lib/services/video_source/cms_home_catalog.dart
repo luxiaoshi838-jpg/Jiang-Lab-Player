@@ -14,7 +14,7 @@ class CmsHomeCatalog {
   static const int maxPagesPerCategory = 5;
 
   static bool isAdultLabel(String label) =>
-      RegExp(r'伦理|福利|成人|无码|情色|写真|三级片|情色').hasMatch(label);
+      RegExp(r'伦理|福利|成人|无码|情色|写真|三级片|擦边').hasMatch(label);
 
   static bool kindMatches(HomeMediaCategory kind, String label) {
     if (label.isEmpty || isAdultLabel(label)) return false;
