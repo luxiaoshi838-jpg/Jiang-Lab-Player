@@ -358,9 +358,11 @@ class BangumiApi {
     final filter = <String, dynamic>{
       "type": [2, 6],
       if (tags.isNotEmpty) "tag": tags,
-      if (rankFilter != null) "rank": rankFilter,
       "nsfw": false
     };
+    if (rankFilter != null) {
+      filter["rank"] = rankFilter;
+    }
 
     if (dateRange?.isValid == true) {
       filter["air_date"] = [">=${dateRange!.start}", "<${dateRange.end}"];
