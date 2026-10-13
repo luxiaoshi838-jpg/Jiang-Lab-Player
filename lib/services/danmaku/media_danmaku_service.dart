@@ -81,7 +81,9 @@ class MediaDanmakuService {
     for (final query in <String>[title, ...titleAliases]) {
       final normalized = normalizeTitle(query);
       if (normalized.isEmpty || !searched.add(normalized)) continue;
-      if (searched.length > 3) break;
+      if (searched.length > 3) {
+        break;
+      }
       try {
         final candidates = await DanmakuApi.searchAnimes(query.trim());
         final chosen = selectAnime(candidates, query);
@@ -126,7 +128,9 @@ class MediaDanmakuService {
   static Uri? communityUri(String path, [Map<String, String>? query]) {
     final base = Uri.tryParse(communityDanmakuApi.trim());
     if (base == null || base.host.isEmpty ||
-        (base.scheme != 'https' && base.scheme != 'http')) return null;
+        (base.scheme != 'https' && base.scheme != 'http')) {
+      return null;
+    }
     final prefix = base.path.endsWith('/')
         ? base.path.substring(0, base.path.length - 1) : base.path;
     return base.replace(path: '$prefix$path', queryParameters: query);
@@ -145,7 +149,9 @@ class MediaDanmakuService {
       try {
         final entry = DanmakuEntry.fromJson(Map<String, dynamic>.from(item));
         if (entry.message.trim().isNotEmpty && entry.time.isFinite &&
-            entry.time >= 0) result.add(entry);
+            entry.time >= 0) {
+          result.add(entry);
+        }
       } catch (_) {
         // One invalid comment must not discard the entire episode.
       }
@@ -203,7 +209,7 @@ class MediaDanmakuService {
         final show = selectAnime(response, query);
         if (show == null) continue;
         final rawDetail = await _communityGet(
-            '/api/v2/bangumi/' + show.animeId.toString(), const {});
+            '/api/v2/bangumi/${show.animeId}', const {});
         if (rawDetail is! Map || rawDetail['bangumi'] is! Map) continue;
         final detail = DanmakuEpisodeResponse.fromJson(
             Map<String, dynamic>.from(rawDetail));
