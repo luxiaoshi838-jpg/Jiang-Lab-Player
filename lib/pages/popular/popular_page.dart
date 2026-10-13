@@ -5,6 +5,7 @@ import 'package:kazumi/bean/widget/bangumi_mirror_error_widget.dart';
 import 'package:kazumi/bean/widget/kazumi_menu.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
 import 'package:kazumi/pages/popular/popular_controller.dart';
+import 'package:kazumi/pages/popular/home_recommendations.dart';
 import 'package:kazumi/bean/card/bangumi_card.dart';
 import 'package:kazumi/utils/constants.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
@@ -37,9 +38,7 @@ class _PopularPageState extends State<PopularPage> {
       initialScrollOffset: popularController.scrollOffset,
     );
     scrollController.addListener(scrollListener);
-    if (popularController.trendList.isEmpty) {
-      popularController.queryBangumiByTrend();
-    }
+    popularController.queryHomeRecommendations();
   }
 
   @override
@@ -51,16 +50,13 @@ class _PopularPageState extends State<PopularPage> {
 
   void scrollListener() {
     popularController.scrollOffset = scrollController.offset;
-    if (scrollController.position.pixels >=
+    if (popularController.currentTag.isNotEmpty &&
+        scrollController.position.pixels >=
             scrollController.position.maxScrollExtent - 200 &&
         !popularController.isLoadingMore) {
       KazumiLogger()
           .i('PopularPageController: Fetching next recommendation batch');
-      if (popularController.currentTag != '') {
-        popularController.queryBangumiByTag();
-      } else {
-        popularController.queryBangumiByTrend();
-      }
+      popularController.queryBangumiByTag();
     }
   }
 
@@ -82,10 +78,20 @@ class _PopularPageState extends State<PopularPage> {
               ),
             ),
           ),
+          SliverToBoxAdapter(
+            child: Observer(
+              builder: (_) => popularController.currentTag.isEmpty
+                  ? HomeRecommendations(controller: popularController)
+                  : const SizedBox.shrink(),
+            ),
+          ),
           SliverPadding(
               padding: const EdgeInsets.fromLTRB(
                   StyleString.cardSpace, 0, StyleString.cardSpace, 0),
               sliver: Observer(builder: (_) {
+                if (popularController.currentTag.isEmpty) {
+                  return const SliverToBoxAdapter(child: SizedBox.shrink());
+                }
                 if (popularController.isTimeOut) {
                   return SliverToBoxAdapter(
                     child: SizedBox(
@@ -199,7 +205,7 @@ class _PopularPageState extends State<PopularPage> {
                           menuChildren: [
                             for (final tag in ['', ...defaultAnimeTags])
                               KazumiMenuItem(
-                                label: tag.isEmpty ? '热门番组' : tag,
+                                label: tag.isEmpty ? '分类推荐' : tag,
                                 selected: tag == popularController.currentTag,
                                 onPressed: () => _selectTag(tag),
                               ),
@@ -211,7 +217,7 @@ class _PopularPageState extends State<PopularPage> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  isTrend ? '热门番组' : popularController.currentTag,
+                                  isTrend ? '分类推荐' : popularController.currentTag,
                                   style: theme.textTheme.headlineMedium!.copyWith(
                                     fontWeight: fontWeight,
                                     fontSize: fontSize,
@@ -265,9 +271,7 @@ class _PopularPageState extends State<PopularPage> {
     popularController.setCurrentTag(selected);
     if (selected.isEmpty) {
       popularController.clearBangumiList();
-      if (popularController.trendList.isEmpty) {
-        await popularController.queryBangumiByTrend();
-      }
+      await popularController.queryHomeRecommendations();
     } else {
       await popularController.queryBangumiByTag(type: 'init');
     }
