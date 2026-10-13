@@ -105,6 +105,13 @@ class CmsHomeCatalog {
   static bool rowMatches(HomeMediaCategory kind, String tag,
       Map row, String categoryName) {
     final typeName = (row['type_name'] ?? categoryName).toString();
+    // Never allow an explicit CMS item kind to override its section.
+    // A short-drama list sometimes includes ordinary TV show rows.
+    final foreignKinds = HomeMediaCategory.values.where(
+        (value) => value != kind && value != HomeMediaCategory.anime);
+    if (foreignKinds.any((value) => kindMatches(value, typeName))) {
+      return false;
+    }
     final genres = [
       (row['vod_class'] ?? '').toString(),
       (row['vod_tag'] ?? '').toString(),
