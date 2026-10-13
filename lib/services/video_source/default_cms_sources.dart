@@ -36,12 +36,36 @@ class DefaultCmsSources {
   /// Deterministic, conservative subset: only API type=1, no adult categories,
   /// no private-network URL, no duplicate host. API records have no scripts.
   static List<Plugin> parse(Object? raw) {
-    if (raw is! Map || raw['sites'] is! List) return const <Plugin>[];
+    if (raw is! Map) return const <Plugin>[];
+    // TVBox (type=1), LibreTV SourceList and MoonTV/LunaTV api_site
+    // all describe the same CMS V10 GET search/detail protocol.
+    final candidates = <Map>[];
+    if (raw['sites'] is List) {
+      for (final item in raw['sites'] as List) {
+        if (item is Map && item['type'] == 1 &&
+            item['searchable'] != 0 && item['quickSearch'] != 0) {
+          candidates.add(item);
+        }
+      }
+    } else if (raw['sources'] is List) {
+      for (final item in raw['sources'] as List) {
+        if (item is Map && item['isAdult'] != true) {
+          candidates.add({'name': item['name'], 'api': item['url'],
+              'key': item['name']});
+        }
+      }
+    } else if (raw['api_site'] is Map) {
+      for (final entry in (raw['api_site'] as Map).entries) {
+        if (entry.value is Map) {
+          final item = entry.value as Map;
+          candidates.add({'name': item['name'], 'api': item['api'],
+              'key': entry.key});
+        }
+      }
+    }
     final result = <Plugin>[];
     final hosts = <String>{};
-    for (final site in raw['sites'] as List) {
-      if (site is! Map || site['type'] != 1) continue;
-      if (site['searchable'] == 0 || site['quickSearch'] == 0) continue;
+    for (final site in candidates) {
       final name = (site['name'] ?? '').toString().trim();
       if (name.isEmpty || _excludedNames.hasMatch(name)) continue;
       final endpoint = _cmsEndpoint(site['api']);
