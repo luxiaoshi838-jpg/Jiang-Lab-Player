@@ -95,8 +95,11 @@ class MediaWorkIndex {
       // Genuine subject metadata wins. Fill only a genuinely missing cover.
       if ((match.images['large'] ?? '').isEmpty &&
           candidate.imageUrl.isNotEmpty) {
-        match.images['large'] = candidate.imageUrl;
-        match.images['common'] = candidate.imageUrl;
+        match.images = <String, String>{
+          ...match.images,
+          'large': candidate.imageUrl,
+          'common': candidate.imageUrl,
+        };
       }
       return;
     }
