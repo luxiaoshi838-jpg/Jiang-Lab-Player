@@ -30,6 +30,15 @@ abstract class _PopularController with Store {
     for (final section in HomeMediaCategory.values) section: false,
   });
 
+  /// One independent selected genre and request token per home category.
+  final ObservableMap<HomeMediaCategory, String> homeSelectedTags =
+      ObservableMap.of({
+    for (final category in HomeMediaCategory.values) category: '',
+  });
+  final Map<HomeMediaCategory, int> _homeGeneration = {
+    for (final category in HomeMediaCategory.values) category: 0,
+  };
+
   @observable
   String currentTag = '';
 
@@ -59,21 +68,40 @@ abstract class _PopularController with Store {
     );
   }
 
+  Future<void> selectHomeSubcategory(
+      HomeMediaCategory category, String subcategory) async {
+    if (!category.supportsSubcategory(subcategory) ||
+        homeSelectedTags[category] == subcategory) {
+      return;
+    }
+    runInAction(() {
+      homeSelectedTags[category] = subcategory;
+      homeItems[category]!.clear();
+    });
+    await refreshHomeSection(category);
+  }
+
   Future<void> refreshHomeSection(HomeMediaCategory category) async {
-    if (homeLoading[category] == true) return;
+    // A user can switch genres while the previous request is in flight.
+    // Results from the old selection must never overwrite the latest one.
+    final generation = (_homeGeneration[category] ?? 0) + 1;
+    _homeGeneration[category] = generation;
+    final subcategory = homeSelectedTags[category] ?? '';
     runInAction(() {
       homeLoading[category] = true;
       homeFailed[category] = false;
     });
     try {
       var entries = await BangumiApi.getHomeRecommendations(
-        subjectType: category.subjectType,
-        genreTags: category.genreTags,
+        category: category,
+        subcategory: subcategory,
         count: HomeMediaCategory.visibleCount,
       );
-      // Retain the working original anime recommendation as a fallback,
-      // particularly for users who have enabled the Bangumi mirror.
-      if (entries.isEmpty && category == HomeMediaCategory.anime) {
+      // Preserve the original anime popularity feed ONLY for its default
+      // unfiltered category. Other genres cannot borrow unrelated items.
+      if (entries.isEmpty &&
+          category == HomeMediaCategory.anime &&
+          subcategory.isEmpty) {
         entries = _bangumiMirrorEnabled
             ? await BangumiApi.getBangumiMirrorPopularSubjects(
                 limit: HomeMediaCategory.visibleCount,
@@ -83,6 +111,7 @@ abstract class _PopularController with Store {
                 limit: HomeMediaCategory.visibleCount,
               );
       }
+      if (_homeGeneration[category] != generation) return;
       runInAction(() {
         final seen = <int>{};
         homeItems[category]!
@@ -93,9 +122,12 @@ abstract class _PopularController with Store {
         homeFailed[category] = homeItems[category]!.isEmpty;
       });
     } catch (_) {
+      if (_homeGeneration[category] != generation) return;
       runInAction(() => homeFailed[category] = true);
     } finally {
-      runInAction(() => homeLoading[category] = false);
+      if (_homeGeneration[category] == generation) {
+        runInAction(() => homeLoading[category] = false);
+      }
     }
   }
 
