@@ -115,4 +115,24 @@ void main() {
     expect(comments.last.time, 13);
   });
 
+  test('public danmuku API returns timestamped messages', () {
+    final comments = MediaDanmakuService.parsePublicDanmaku(
+      '{"code":23,"danmuku":['
+      '[321.483,"right","","1125690","你好","10-13 19:00","32px"],'
+      '[322.0,"top","","16777215","第二条","","32px"]'
+      ']}',
+    );
+    expect(comments.length, 2);
+    expect(comments.first.time, 321.483);
+    expect(comments.first.message, '你好');
+    expect(comments.last.type, 5);
+  });
+
+  test('public library also supports Bilibili XML', () {
+    final comments = MediaDanmakuService.parsePublicDanmaku(
+        '<i><d p="5.0,1,25,16777215,0,0,0,0">弹幕</d></i>');
+    expect(comments.length, 1);
+    expect(comments.single.message, '弹幕');
+  });
+
 }
