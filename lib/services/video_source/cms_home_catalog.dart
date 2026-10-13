@@ -118,12 +118,12 @@ class CmsHomeCatalog {
       typeName,
       categoryName,
     ].join(',');
-    if (isAdultLabel(genres)) return false;
+    if (isAdultLabel(genres)) { return false; }
     if (kind == HomeMediaCategory.shortDrama &&
         !kindMatches(kind, typeName) &&
-        !kindMatches(kind, categoryName)) return false;
+        !kindMatches(kind, categoryName)) { return false; }
     if (kind != HomeMediaCategory.shortDrama &&
-        (typeName.contains('短剧') || typeName.contains('微短'))) return false;
+        (typeName.contains('短剧') || typeName.contains('微短'))) { return false; }
     return genreMatches(tag, genres);
   }
 
@@ -210,17 +210,17 @@ class CmsHomeCatalog {
               final items = parseItems(data, source, category,
                   subcategory, group['name']!);
               for (final item in items) {
-                final key = '${item.nameCn.toLowerCase()}';
-                if (seen.add(key)) found.add(item);
+                final key = item.nameCn.toLowerCase();
+                if (seen.add(key)) { found.add(item); }
                 if (found.length >= count) {
                   return found;
                 }
               }
               if (data is! Map || data['list'] is! List ||
-                  (data['list'] as List).isEmpty) break;
+                  (data['list'] as List).isEmpty) { break; }
               final pageCount = int.tryParse(
                   (data['pagecount'] ?? '').toString());
-              if (pageCount != null && page >= pageCount) break;
+              if (pageCount != null && page >= pageCount) { break; }
             }
           }
         } catch (_) {
