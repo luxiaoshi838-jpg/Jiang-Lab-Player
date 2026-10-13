@@ -416,9 +416,8 @@ class MediaDanmakuService {
   static int? _episodeNumber(String title) {
     final chinese = RegExp(r'第\s*0*([0-9]{1,4})\s*[集话期]').firstMatch(title);
     if (chinese != null) return int.tryParse(chinese.group(1)!);
-    // Real TV/CMS episode lists often label an episode only "01" or "1".
-    // We still require an unambiguous single episode-ID match below.
-    final bare = RegExp(r'^\\s*0*([0-9]{1,4})\\s*
+    final bare = RegExp(r'^\s*0*([0-9]{1,4})\s*$').firstMatch(title);
+    if (bare != null) return int.tryParse(bare.group(1)!);
     final english = RegExp(
       r'(?:^|[\s_.-])(?:ep|episode|e)\s*0*([0-9]{1,4})(?:\b|$)',
       caseSensitive: false,
