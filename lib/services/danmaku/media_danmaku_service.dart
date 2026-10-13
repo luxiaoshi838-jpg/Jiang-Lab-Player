@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:kazumi/modules/danmaku/danmaku_module.dart';
@@ -136,6 +137,57 @@ class MediaDanmakuService {
     return base.replace(path: '$prefix$path', queryParameters: query);
   }
 
+  /// Public URL-based libraries often return JSON instead of Bilibili XML.
+  /// Their common 'danmuku' rows are:
+  /// [seconds, position, ..., RGB, message, ..., fontSize].
+  static List<DanmakuEntry> parsePublicDanmaku(String response) {
+    dynamic data;
+    try {
+      data = jsonDecode(response);
+    } catch (_) {
+      return parseBilibiliXml(response);
+    }
+    if (data is! Map) {
+      return const [];
+    }
+    final comments = parseCommunityComments(data);
+    if (comments.isNotEmpty) {
+      return comments;
+    }
+    final rows = data['danmuku'] ?? data['danmu'] ?? data['data'];
+    if (rows is! List) {
+      return const [];
+    }
+    final results = <DanmakuEntry>[];
+    for (final row in rows) {
+      if (row is! List || row.length < 5) {
+        continue;
+      }
+      final time = double.tryParse(row[0].toString());
+      final message = row[4].toString().trim();
+      if (time == null || !time.isFinite || time < 0 || message.isEmpty) {
+        continue;
+      }
+      final position = row[1].toString().toLowerCase();
+      final type = switch (position) {
+        'top' || '5' => 5,
+        'bottom' || '4' => 4,
+        _ => 1,
+      };
+      final rawColor = row[3].toString();
+      final rgb = int.tryParse(rawColor.replaceFirst('#', ''), radix: 16) ??
+          int.tryParse(rawColor) ?? 0xFFFFFF;
+      results.add(DanmakuEntry(
+        message: message,
+        time: time,
+        type: type,
+        color: generateDanmakuColor(rgb),
+        source: '公共弹幕库',
+      ));
+    }
+    return results;
+  }
+
   static List<DanmakuEntry> parseCommunityComments(dynamic data) {
     final List<dynamic>? raw = data is List
         ? data
@@ -198,7 +250,7 @@ class MediaDanmakuService {
               options: Options(responseType: ResponseType.plain,
                   receiveTimeout: const Duration(seconds: 8)),
             ).timeout(const Duration(seconds: 10));
-            final comments = parseBilibiliXml(response.data.toString());
+            final comments = parsePublicDanmaku(response.data.toString());
             if (comments.isNotEmpty) {
               return MediaDanmakuMatch(comments);
             }
