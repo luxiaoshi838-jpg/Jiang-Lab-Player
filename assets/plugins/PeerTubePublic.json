@@ -1,0 +1,44 @@
+{
+  "api": "8",
+  "name": "PeerTube公开点播",
+  "type": "video",
+  "version": "1.0",
+  "muliSources": false,
+  "useWebview": false,
+  "useNativePlayer": true,
+  "userAgent": "",
+  "baseURL": "https://peertube.tv/",
+  "searchURL": "",
+  "searchList": "",
+  "searchName": "",
+  "searchResult": "",
+  "chapterRoads": "",
+  "chapterResult": "",
+  "searchMode": "api",
+  "chapterMode": "api",
+  "searchApiConfig": {
+    "request": {
+      "method": "GET",
+      "url": "https://peertube.tv/api/v1/search/videos",
+      "query": {
+        "search": "@keyword",
+        "count": 20,
+        "isLive": false,
+        "nsfw": false
+      }
+    },
+    "listPath": "$.data[*]",
+    "namePath": "$.name",
+    "sourcePath": "$.uuid"
+  },
+  "chapterApiConfig": {
+    "request": {
+      "method": "GET",
+      "url": "https://peertube.tv/api/v1/videos/@source"
+    },
+    "roadsPath": "",
+    "episodesPath": "$.streamingPlaylists[*]",
+    "episodeNamePath": "$.type",
+    "episodeUrlPath": "$.playlistUrl"
+  }
+}

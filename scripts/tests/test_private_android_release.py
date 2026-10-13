@@ -57,6 +57,15 @@ class PrivateSigningTests(unittest.TestCase):
             self.assertEqual(blob, b"TEST-ONLY")
             self.assertEqual(fields["key alias"], "demo")
 
+    def test_apk_manifest_identity_can_be_checked_before_upgrade(self):
+        actual = module.parse_apk_identity(
+            "package: name='com.jianglab.suibo' "
+            "versionCode='20309' versionName='2.3.9'"
+        )
+        self.assertEqual(actual, ("com.jianglab.suibo", 20309, "2.3.9"))
+        with self.assertRaises(RuntimeError):
+            module.parse_apk_identity("malformed APK metadata")
+
     def test_property_escaping_and_cert_hash(self):
         self.assertEqual(module.property_value("x\\y=z\n"), "x\\\\y\\=z\\n")
         fingerprint = "01:" * 31 + "AB"

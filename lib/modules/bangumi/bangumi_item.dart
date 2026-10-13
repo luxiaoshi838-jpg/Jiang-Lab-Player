@@ -84,6 +84,7 @@ class BangumiItem {
     required String pluginName,
     required String source,
     required String title,
+    String imageUrl = '',
   }) {
     final key = '$pluginName|$source';
     var hash = 0x811c9dc5;
@@ -99,7 +100,8 @@ class BangumiItem {
       airDate: '',
       airWeekday: 1,
       rank: 0,
-      images: const {'large': '', 'common': '', 'medium': '', 'small': '', 'grid': ''},
+      images: {'large': imageUrl, 'common': imageUrl,
+        'medium': imageUrl, 'small': imageUrl, 'grid': imageUrl},
       tags: [],
       alias: [],
       ratingScore: 0,
