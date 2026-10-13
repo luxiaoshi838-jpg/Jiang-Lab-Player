@@ -205,7 +205,7 @@ class _PopularPageState extends State<PopularPage> {
                           menuChildren: [
                             for (final tag in ['', ...defaultAnimeTags])
                               KazumiMenuItem(
-                                label: tag.isEmpty ? '分类推荐' : tag,
+                                label: tag.isEmpty ? '四类推荐' : '番剧 · $tag',
                                 selected: tag == popularController.currentTag,
                                 onPressed: () => _selectTag(tag),
                               ),
@@ -217,7 +217,7 @@ class _PopularPageState extends State<PopularPage> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  isTrend ? '分类推荐' : popularController.currentTag,
+                                  isTrend ? '四类推荐' : '番剧 · ${popularController.currentTag}',
                                   style: theme.textTheme.headlineMedium!.copyWith(
                                     fontWeight: fontWeight,
                                     fontSize: fontSize,
