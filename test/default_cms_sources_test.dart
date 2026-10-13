@@ -49,6 +49,26 @@ void main() {
     expect(list.single.chapterMode, 'api');
   });
 
+  test('LibreTV and LunaTV community CMS lists need no manual rule editor', () {
+    final libre = DefaultCmsSources.parse({
+      'sources': [
+        {'name': '公共点播', 'url': 'https://libre.example/api.php/provide/vod'},
+        {'name': '成人站', 'url': 'https://adult.example/api.php/provide/vod',
+          'isAdult': true},
+      ],
+    });
+    expect(libre, hasLength(1));
+    expect(libre.single.searchApiConfig.imagePath, r'$.vod_pic');
+
+    final moon = DefaultCmsSources.parse({
+      'api_site': {
+        'site1': {'name': '国产剧', 'api': 'https://moon.example/api.php/provide/vod'},
+      },
+    });
+    expect(moon, hasLength(1));
+    expect(moon.single.chapterApiConfig.roadEpisodesPath, r'$.list[0].vod_play_url');
+  });
+
   test('existing engine parses real CMS poster, ID and multi-route episodes', () {
     final rule = DefaultCmsSources.createPlugin(
       name: 'CMS · Test',
