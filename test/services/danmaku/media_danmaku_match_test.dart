@@ -135,4 +135,29 @@ void main() {
     expect(comments.single.message, '弹幕');
   });
 
+  test('classic mainland dramas use explicit numeric episode labels', () {
+    final episodes = [
+      DanmakuEpisode(episodeId: 7701, episodeTitle: '01'),
+      DanmakuEpisode(episodeId: 7702, episodeTitle: '02'),
+    ];
+    expect(MediaDanmakuService.selectEpisodeId(episodes, 1), 7701);
+    expect(MediaDanmakuService.selectEpisodeId(episodes, 2), 7702);
+    expect(MediaDanmakuService.titlesMatch('亮剑', '《亮剑》'), isTrue);
+    expect(MediaDanmakuService.titlesMatch(
+      '知否知否应是绿肥红瘦', '知否知否应是绿肥红瘦'), isTrue);
+  });
+
+  test('public library URL accepts ordinary sources but not private links', () {
+    expect(MediaDanmakuService.publicDanmakuVideoUrl(
+      'https://cdn.example.com/tv/liangjian/01.m3u8'), isNotNull);
+    expect(MediaDanmakuService.publicDanmakuVideoUrl(
+      'https://v.qq.com/x/cover/abc/video.html'), isNotNull);
+    expect(MediaDanmakuService.publicDanmakuVideoUrl(
+      'https://cdn.example.com/01.m3u8?token=private'), isNull);
+    expect(MediaDanmakuService.publicDanmakuVideoUrl(
+      'https://127.0.0.1/video.mp4'), isNull);
+    expect(MediaDanmakuService.publicDanmakuVideoUrl(
+      'http://example.com/movie.m3u8'), isNull);
+  });
+
 }
