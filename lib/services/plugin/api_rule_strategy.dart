@@ -143,6 +143,9 @@ class ApiRuleStrategy {
     RestrictedJsonPath.validate(config.listPath);
     RestrictedJsonPath.validate(config.namePath);
     RestrictedJsonPath.validate(config.sourcePath);
+    if (config.imagePath.isNotEmpty) {
+      RestrictedJsonPath.validate(config.imagePath);
+    }
   }
 
   RuleSearchParseResult parseSearch(String raw, ApiSearchConfig config) {
@@ -165,7 +168,19 @@ class ApiRuleStrategy {
           diagnostics.add('搜索节点 $index 缺少名称或来源，已跳过');
           continue;
         }
-        results.add(SearchItem(name: name, src: source));
+        final imageUrl = config.imagePath.isEmpty
+            ? ''
+            : _stringValue(RestrictedJsonPath.readFirst(
+                node, config.imagePath));
+        final imageUri = Uri.tryParse(imageUrl);
+        final safeImage = imageUri != null &&
+                imageUri.scheme == 'https' &&
+                imageUri.host.isNotEmpty &&
+                imageUri.userInfo.isEmpty
+            ? imageUrl
+            : '';
+        results.add(SearchItem(
+          name: name, src: source, imageUrl: safeImage));
         fragments.add(jsonEncode(node));
       } on ApiRuleFormatException {
         rethrow;
