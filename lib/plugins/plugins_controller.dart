@@ -9,6 +9,7 @@ import 'package:kazumi/services/plugin/plugin_install_time_tracker.dart';
 import 'package:kazumi/request/apis/plugin_catalog_api.dart';
 import 'package:kazumi/modules/plugin/plugin_http_module.dart';
 import 'package:kazumi/services/logging/logger.dart';
+import 'package:kazumi/services/video_source/default_cms_sources.dart';
 import 'package:kazumi/utils/async_serial_queue.dart';
 import 'package:kazumi/utils/async_single_flight.dart';
 import 'package:kazumi/utils/version.dart';
@@ -119,6 +120,67 @@ abstract class _PluginsController with Store {
       await newPluginDirectory!.create(recursive: true);
     }
     await _loadAllPlugins();
+    await _migrateBundledPublicVideoRule();
+    await _bootstrapDefaultCmsSources();
+  }
+
+  /// One-time, non-destructive upgrade for installations whose existing
+  /// plugins.json predates the first public VOD source. Removal remains
+  /// user-controlled: the migration marker prevents re-adding a deleted rule.
+  Future<void> _migrateBundledPublicVideoRule() async {
+    final directory = newPluginDirectory;
+    if (directory == null) return;
+    final marker = File('${directory.path}/peertube_public_v1_migrated');
+    if (await marker.exists()) return;
+    try {
+      if (!pluginList.any((p) => p.name == 'PeerTube公开点播')) {
+        final raw = await rootBundle.loadString('assets/plugins/PeerTubePublic.json');
+        final source = Plugin.fromJson(
+          Map<String, dynamic>.from(jsonDecode(raw) as Map),
+        );
+        // Show the new VOD source before the existing anime-only rules,
+        // without changing their relative order or overwriting user rules.
+        await _mutateAndPersist(
+          () => pluginList.insert(0, source),
+          errorMessage: 'Plugin: failed to add bundled VOD source',
+        );
+      }
+      await marker.writeAsString('v1\n', flush: true);
+    } catch (error) {
+      KazumiLogger().w('Plugin: bundled VOD rule migration unavailable',
+          error: error);
+    }
+  }
+
+  /// Users should not have to choose a source at first launch. Download only
+  /// the public, data-only TVBox CMS subset, build regular Kazumi API rules,
+  /// then persist them alongside existing rules. Never execute a Spider/JAR.
+  ///
+  /// Marker is written only after at least one source was saved. Respect
+  /// user removals: a later app launch never silently re-adds the defaults.
+  Future<void> _bootstrapDefaultCmsSources() async {
+    final directory = newPluginDirectory;
+    if (directory == null) return;
+    final marker = File('${directory.path}/cms_v10_auto_sources_v1');
+    if (await marker.exists()) return;
+    try {
+      final candidates = await DefaultCmsSources.fetch();
+      if (candidates.isEmpty) {
+        KazumiLogger().i('CMS bootstrap: discovery unavailable, retry next launch');
+        return;
+      }
+      await _mutateAndPersist(() {
+        final existing = pluginList.map((p) => p.name).toSet();
+        final additions = candidates.where((p) => !existing.contains(p.name));
+        pluginList.insertAll(0, additions);
+      }, errorMessage: 'CMS bootstrap: failed to persist defaults');
+      await marker.writeAsString('installed; do not reinstall if removed\n',
+          flush: true);
+      KazumiLogger().i('CMS bootstrap: default API rules installed');
+    } catch (error) {
+      KazumiLogger().w('CMS bootstrap: deferred until a later launch',
+          error: error);
+    }
   }
 
   // Loads all plugins from the directory, populates the plugin list, and saves to plugins.json if needed

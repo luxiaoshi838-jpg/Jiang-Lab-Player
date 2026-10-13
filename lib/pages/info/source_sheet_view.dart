@@ -5,12 +5,14 @@ class _SourceSearchGroup {
     required this.name,
     required this.keyword,
     required this.status,
+    this.failureHint,
     required this.results,
   });
 
   final String name;
   final String keyword;
   final PluginSearchStatus status;
+  final String? failureHint;
   final List<SearchItem> results;
 
   bool get isSearching => status == PluginSearchStatus.pending;
@@ -35,24 +37,34 @@ class _SourceSheetView extends StatefulWidget {
   const _SourceSheetView({
     required this.keyword,
     required this.groups,
+    required this.hiddenAnimeCount,
+    required this.onSearchAnimeRules,
     required this.firstResultSource,
     required this.onSourceSearch,
     required this.onSourceAliasSearch,
     required this.onRetry,
     required this.onVerify,
     required this.onOpenBrowser,
+    required this.onOpenOfficialPlatform,
+    required this.onOpenVerifiedOfficialProgramme,
+    required this.programmeDate,
     required this.onPlay,
     required this.onClose,
   });
 
   final String keyword;
   final List<_SourceSearchGroup> groups;
+  final int hiddenAnimeCount;
+  final VoidCallback onSearchAnimeRules;
   final String? firstResultSource;
   final ValueChanged<String> onSourceSearch;
   final ValueChanged<String> onSourceAliasSearch;
   final ValueChanged<String> onRetry;
   final ValueChanged<String> onVerify;
   final ValueChanged<String> onOpenBrowser;
+  final ValueChanged<OfficialVideoPlatform> onOpenOfficialPlatform;
+  final ValueChanged<Uri> onOpenVerifiedOfficialProgramme;
+  final String programmeDate;
   final void Function(String sourceName, SearchItem result) onPlay;
   final VoidCallback onClose;
 
@@ -144,6 +156,70 @@ class _SourceSheetViewState extends State<_SourceSheetView> {
               child: CustomScrollView(
                 controller: _scrollController,
                 slivers: [
+                  if (widget.hiddenAnimeCount > 0)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 10, 20, 6),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '这是一部影视作品，已暂时跳过 ${widget.hiddenAnimeCount} 个动漫专用来源',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: widget.onSearchAnimeRules,
+                              child: const Text('也搜索动漫来源'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  if (pending == 0 && resultCount == 0)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '已安装的播放规则没有返回可用剧集。番剧来源不一定收录电视剧、电影，部分站点也可能失效。',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                            const SizedBox(height: 12),
+                            if (OfficialVideoSearch.knownProgramme(
+                                  widget.keyword, widget.programmeDate)
+                                case final known?)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: OutlinedButton.icon(
+                                  onPressed: () =>
+                                      widget.onOpenVerifiedOfficialProgramme(known.url),
+                                  icon: const Icon(Icons.open_in_new, size: 16),
+                                  label: Text(known.label),
+                                ),
+                              ),
+                            Text('前往正版平台搜索（网站观看，非内置播放结果）',
+                                style: Theme.of(context).textTheme.bodySmall),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                for (final platform in OfficialVideoPlatform.values)
+                                  OutlinedButton.icon(
+                                    onPressed: () =>
+                                        widget.onOpenOfficialPlatform(platform),
+                                    icon: const Icon(Icons.open_in_new, size: 16),
+                                    label: Text(OfficialVideoSearch.label(platform)),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   if (widget.groups.isEmpty)
                     const SliverToBoxAdapter(
                       child: GeneralEmptyState(
@@ -301,7 +377,8 @@ class _SourceSheetViewState extends State<_SourceSheetView> {
           PluginSearchStatus.captcha =>
             _buildSourceIssue(group.name, requiresVerification: true),
           PluginSearchStatus.error =>
-            _buildSourceIssue(group.name, requiresVerification: false),
+            _buildSourceIssue(group.name, requiresVerification: false,
+                failureHint: group.failureHint),
         },
       );
     }
@@ -440,7 +517,7 @@ class _SourceSheetViewState extends State<_SourceSheetView> {
       );
 
   Widget _buildSourceIssue(String sourceName,
-      {required bool requiresVerification}) {
+      {required bool requiresVerification, String? failureHint}) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final (icon, title, hint, action, onAction) = requiresVerification
@@ -454,7 +531,7 @@ class _SourceSheetViewState extends State<_SourceSheetView> {
         : (
             Icons.error_outline_rounded,
             '检索失败',
-            '可以重试，或打开网站检查是否可用。',
+            failureHint ?? '可以重试，或打开网站检查是否可用。',
             '重试',
             () => widget.onRetry(sourceName),
           );

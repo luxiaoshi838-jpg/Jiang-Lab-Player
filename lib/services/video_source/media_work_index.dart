@@ -9,6 +9,13 @@ class MediaWorkIndex {
       .toLowerCase()
       .replaceAll(RegExp(r'[\s·•:：.。!！?？《》〈〉【】\[\]（）(),，、]'), '');
 
+  /// Ignore only final parenthesized production year, preserving seasons.
+  static String normalizedWorkTitle(String title) {
+    final text = title.trim();
+    final ending = RegExp(r'[（(](?:19|20)[0-9]{2}[）)]$').firstMatch(text);
+    return normalized(ending == null ? text : text.substring(0, ending.start));
+  }
+
   static String? yearOf(BangumiItem item) {
     if (item.airDate.length >= 4 &&
         RegExp(r'^(19|20)\d{2}$').hasMatch(item.airDate.substring(0, 4))) {
@@ -24,10 +31,10 @@ class MediaWorkIndex {
   }
 
   static bool sameWork(BangumiItem item, String title, {String? year}) {
-    final normalizedTitle = normalized(title);
+    final normalizedTitle = normalizedWorkTitle(title);
     if (normalizedTitle.isEmpty) return false;
     final names = [item.nameCn, item.name, ...item.alias];
-    if (!names.any((name) => normalized(name) == normalizedTitle)) {
+    if (!names.any((name) => normalizedWorkTitle(name) == normalizedTitle)) {
       return false;
     }
     final knownYear = yearOf(item);
@@ -85,10 +92,20 @@ class MediaWorkIndex {
     final match = uniqueMatch(works, title, year: year);
     if (match != null) {
       addCandidate(match, candidate);
+      // Genuine subject metadata wins. Fill only a genuinely missing cover.
+      if ((match.images['large'] ?? '').isEmpty &&
+          candidate.imageUrl.isNotEmpty) {
+        match.images = <String, String>{
+          ...match.images,
+          'large': candidate.imageUrl,
+          'common': candidate.imageUrl,
+        };
+      }
       return;
     }
     final shell = BangumiItem.fromRule(
       pluginName: candidate.pluginName, source: candidate.url, title: title,
+      imageUrl: candidate.imageUrl,
     );
     addCandidate(shell, candidate);
     works.add(shell);

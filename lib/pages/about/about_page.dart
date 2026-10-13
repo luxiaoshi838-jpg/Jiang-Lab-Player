@@ -128,7 +128,7 @@ class _ProjectHeader extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            '适用于 Windows 与 Android 的开源综合影视播放器，基于 Kazumi 改造',
+            '适用于 Windows 与 Android 的开源综合影视播放器，基于开源播放器改造',
             style: theme.textTheme.bodyLarge,
           ),
           const SizedBox(height: 20),
