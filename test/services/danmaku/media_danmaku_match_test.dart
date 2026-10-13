@@ -94,4 +94,45 @@ void main() {
     expect(BilibiliVideoRef.fromUrl('https://www.bilibili.com/video/BV1234567890?p=2')?.page, 2);
     expect(BilibiliVideoRef.fromUrl('https://live.bilibili.com/1234'), isNull);
   });
+  test('community API URL preserves a configured prefix and encodes query', () {
+    final uri = MediaDanmakuService.communityUri(
+      '/api/v2/search/episodes', {'anime': '生万物', 'episode': '2'});
+    expect(uri, isNotNull);
+    expect(uri!.queryParameters['anime'], '生万物');
+    expect(uri.queryParameters['episode'], '2');
+  });
+
+  test('community response skips invalid comments without losing valid ones', () {
+    final comments = MediaDanmakuService.parseCommunityComments({
+      'comments': [
+        {'m': '你好', 'p': '12.5,1,16777215,腾讯'},
+        {'m': 'bad', 'p': 'invalid'},
+        {'m': '世界', 'p': '13.0,5,16777215,爱奇艺'},
+      ]
+    });
+    expect(comments.length, 2);
+    expect(comments.first.message, '你好');
+    expect(comments.last.time, 13);
+  });
+
+  test('public danmuku API returns timestamped messages', () {
+    final comments = MediaDanmakuService.parsePublicDanmaku(
+      '{"code":23,"danmuku":['
+      '[321.483,"right","","1125690","你好","10-13 19:00","32px"],'
+      '[322.0,"top","","16777215","第二条","","32px"]'
+      ']}',
+    );
+    expect(comments.length, 2);
+    expect(comments.first.time, 321.483);
+    expect(comments.first.message, '你好');
+    expect(comments.last.type, 5);
+  });
+
+  test('public library also supports Bilibili XML', () {
+    final comments = MediaDanmakuService.parsePublicDanmaku(
+        '<i><d p="5.0,1,25,16777215,0,0,0,0">弹幕</d></i>');
+    expect(comments.length, 1);
+    expect(comments.single.message, '弹幕');
+  });
+
 }
