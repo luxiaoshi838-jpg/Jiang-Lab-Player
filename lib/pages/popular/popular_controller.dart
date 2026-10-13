@@ -1,4 +1,7 @@
 import 'dart:math';
+import 'package:flutter_modular/flutter_modular.dart';
+import 'package:kazumi/plugins/plugins_controller.dart';
+import 'package:kazumi/services/video_source/cms_home_catalog.dart';
 import 'package:kazumi/request/apis/bangumi_api.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
 import 'package:kazumi/pages/popular/home_media_category.dart';
@@ -92,11 +95,27 @@ abstract class _PopularController with Store {
       homeFailed[category] = false;
     });
     try {
-      var entries = await BangumiApi.getHomeRecommendations(
-        category: category,
-        subcategory: subcategory,
-        count: HomeMediaCategory.visibleCount,
-      );
+      var entries = category == HomeMediaCategory.anime
+          ? await BangumiApi.getHomeRecommendations(
+              category: category,
+              subcategory: subcategory,
+              count: HomeMediaCategory.visibleCount,
+            )
+          : await CmsHomeCatalog.load(
+              category: category,
+              subcategory: subcategory,
+              installedSources: inject<PluginsController>().pluginList,
+              count: HomeMediaCategory.visibleCount,
+            );
+      // Metadata-only Bangumi is secondary: CMS category lists provide
+      // actual playable source identities and posters for live-action works.
+      if (entries.isEmpty && category != HomeMediaCategory.anime) {
+        entries = await BangumiApi.getHomeRecommendations(
+          category: category,
+          subcategory: subcategory,
+          count: HomeMediaCategory.visibleCount,
+        );
+      }
       // Preserve the original anime popularity feed ONLY for its default
       // unfiltered category. Other genres cannot borrow unrelated items.
       if (entries.isEmpty &&
