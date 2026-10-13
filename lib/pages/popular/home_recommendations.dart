@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:kazumi/bean/card/bangumi_card.dart';
+import 'package:kazumi/bean/widget/kazumi_menu.dart';
 import 'package:kazumi/pages/popular/home_media_category.dart';
 import 'package:kazumi/pages/popular/popular_controller.dart';
 import 'package:kazumi/utils/constants.dart';
@@ -46,10 +47,63 @@ class _HomeSection extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: Text(category.label,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          )),
+                  child: Observer(builder: (_) {
+                    final selected =
+                        controller.homeSelectedTags[category] ?? '';
+                    final heading = selected.isEmpty
+                        ? category.popularTitle
+                        : '${category.label} · $selected';
+                    return Align(
+                      alignment: Alignment.centerLeft,
+                      child: KazumiMenuButton(
+                        animated: true,
+                        style: const MenuStyle(
+                          maximumSize:
+                              WidgetStatePropertyAll(Size(240, 350)),
+                        ),
+                        menuChildren: [
+                          for (final tag in [
+                            '',
+                            ...category.subcategories,
+                          ])
+                            KazumiMenuItem(
+                              label: tag.isEmpty
+                                  ? category.popularTitle
+                                  : tag,
+                              selected: tag == selected,
+                              onPressed: () =>
+                                  controller.selectHomeSubcategory(
+                                      category, tag),
+                            ),
+                        ],
+                        builder: (context, toggle) => InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: toggle,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 6, horizontal: 4),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    heading,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme.titleLarge?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                const Icon(Icons.keyboard_arrow_down),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
                 ),
                 IconButton(
                   tooltip: '刷新${category.label}',
@@ -69,8 +123,8 @@ class _HomeSection extends StatelessWidget {
                   child: loading
                       ? const CircularProgressIndicator()
                       : Text(controller.homeFailed[category] == true
-                          ? '${category.label}推荐暂不可用，可刷新重试'
-                          : '暂无${category.label}推荐'),
+                          ? '暂无符合此分类的作品，可换个标签或刷新'
+                          : '暂无此分类作品'),
                 ),
               );
             }
