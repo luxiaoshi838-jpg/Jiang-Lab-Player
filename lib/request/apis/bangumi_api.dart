@@ -216,6 +216,52 @@ class BangumiApi {
     return bangumiList;
   }
 
+  // One recommendation ranking strategy across all home video categories.
+  static Future<List<BangumiItem>> getHomeRecommendations({
+    required int subjectType,
+    List<String> genreTags = const <String>[],
+    int count = 12,
+  }) async {
+    final chosen = <BangumiItem>[];
+    final known = <int>{};
+    final tags = genreTags.isEmpty ? <String>[''] : genreTags;
+    for (final tag in tags) {
+      if (chosen.length >= count) break;
+      try {
+        final response = await _client.post(
+          ApiEndpoints.formatUrl(
+            ApiEndpoints.bangumiAPIDomain + ApiEndpoints.bangumiRankSearch,
+            [100, 0],
+          ),
+          data: {
+            'keyword': '',
+            'sort': 'heat',
+            'filter': {
+              'type': [subjectType],
+              if (tag.isNotEmpty) 'tag': [tag],
+              'nsfw': false,
+            }
+          },
+        );
+        final rows = response['data'];
+        if (rows is! List) continue;
+        for (final row in rows) {
+          if (row is! Map<String, dynamic>) continue;
+          final entry = BangumiItem.fromJson(row);
+          if (entry.type == subjectType &&
+              (entry.name.isNotEmpty || entry.nameCn.isNotEmpty) &&
+              known.add(entry.id)) {
+            chosen.add(entry);
+          }
+          if (chosen.length >= count) break;
+        }
+      } catch (error) {
+        KazumiLogger().w('Home recommendation lookup failed', error: error);
+      }
+    }
+    return chosen.take(count).toList();
+  }
+
   static String buildBangumiMirrorPopularPath({
     String tag = '',
     int limit = 24,
