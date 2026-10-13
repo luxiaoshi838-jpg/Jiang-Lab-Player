@@ -66,11 +66,23 @@ abstract class _PopularController with Store {
       homeFailed[category] = false;
     });
     try {
-      final entries = await BangumiApi.getHomeRecommendations(
+      var entries = await BangumiApi.getHomeRecommendations(
         subjectType: category.subjectType,
         genreTags: category.genreTags,
         count: HomeMediaCategory.visibleCount,
       );
+      // Retain the working original anime recommendation as a fallback,
+      // particularly for users who have enabled the Bangumi mirror.
+      if (entries.isEmpty && category == HomeMediaCategory.anime) {
+        entries = _bangumiMirrorEnabled
+            ? await BangumiApi.getBangumiMirrorPopularSubjects(
+                limit: HomeMediaCategory.visibleCount,
+              )
+            : await BangumiApi.getBangumiTrendsList(
+                type: 2,
+                limit: HomeMediaCategory.visibleCount,
+              );
+      }
       runInAction(() {
         final seen = <int>{};
         homeItems[category]!
