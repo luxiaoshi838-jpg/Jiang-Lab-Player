@@ -105,24 +105,19 @@ class MediaDanmakuService {
         );
       }
     }
-
-    // Some films, TV series and variety shows have no matching DanDanPlay
-    // entry. A compatible community server can supply comments collected from
-    // licensed platforms independently of the playback source.
     final communityMatch = await _matchCommunity(
       title: title,
       titleAliases: titleAliases,
       episode: episode,
-      pageUrls: pageUrls,
       episodeTitle: episodeTitle,
+      pageUrls: pageUrls,
     );
-    if (communityMatch != null) return communityMatch;
-    return null;
+    return communityMatch;
   }
 
-  // This server exposes the DanDanPlay-compatible endpoints documented at
-  // github.com/huangxd-/danmu_api. The URL may be overridden at build time
-  // with --dart-define=SUIBO_DANMU_API_URL=https://your-server.
+  /// A DanDanPlay-compatible community aggregator provides movie, drama and
+  /// variety comments not indexed by the original animation-oriented API.
+  /// Override with --dart-define=SUIBO_DANMU_API_URL=https://your-server
   static const String communityDanmakuApi = String.fromEnvironment(
     'SUIBO_DANMU_API_URL',
     defaultValue: 'https://api.danmu.icu',
@@ -131,190 +126,10 @@ class MediaDanmakuService {
   static Uri? communityUri(String path, [Map<String, String>? query]) {
     final base = Uri.tryParse(communityDanmakuApi.trim());
     if (base == null || base.host.isEmpty ||
-        (base.scheme != 'https' && base.scheme != 'http')) {
-      return null;
-    }
-    final prefix = base.path.replaceFirst(RegExp(r'/ harmless presentation differences, never strip seasons or
-  /// edition words indiscriminately.
-  static String normalizeTitle(String title) {
-    final ascii = title.replaceAllMapped(
-      RegExp(r'[\uFF01-\uFF5E]'),
-      (m) => String.fromCharCode(m.group(0)!.codeUnitAt(0) - 0xFEE0),
-    );
-    return ascii.toLowerCase().replaceAll(
-      RegExp(r'[\s_\-—–·:：.。!！?？《》〈〉\[\]【】（）(),，、]'),
-      '',
-    );
-  }
-
-  static int? _season(String normalized) {
-    final match = _seasonSuffix.firstMatch(normalized);
-    if (match == null) return null;
-    final value = match.group(1) ?? match.group(2) ?? match.group(3)!;
-    const chinese = {
-      '一': 1, '二': 2, '三': 3, '四': 4, '五': 5,
-      '六': 6, '七': 7, '八': 8, '九': 9, '十': 10,
-    };
-    return int.tryParse(value) ?? chinese[value];
-  }
-
-  static final RegExp _seasonSuffix = RegExp(
-    r'(?:第([0-9一二三四五六七八九十]+)季|season0*([0-9]+)|s0*([0-9]+))$',
-  );
-
-  static bool titlesMatch(String requested, String found) {
-    final a = normalizeTitle(requested);
-    final b = normalizeTitle(found);
-    if (a.isEmpty || b.isEmpty) return false;
-    if (a == b) return true;
-    final aSeason = _season(a);
-    final bSeason = _season(b);
-    if (aSeason == null && bSeason == null) return false;
-    // An unlabelled work may represent season one, but never guess later
-    // seasons. Multiple season-one candidates remain ambiguous below.
-    if (aSeason != bSeason &&
-        !(aSeason == null && bSeason == 1) &&
-        !(bSeason == null && aSeason == 1)) {
-      return false;
-    }
-    final aBase = a.replaceFirst(_seasonSuffix, '');
-    final bBase = b.replaceFirst(_seasonSuffix, '');
-    return aBase.isNotEmpty && aBase == bBase;
-  }
-
-  /// Never silently select from duplicated titles or a truncated result set.
-  static DanmakuSearchAnime? selectAnime(
-    DanmakuSearchResponse response,
-    String title,
-  ) {
-    if (response.hasMore) return null;
-    final unique = <int, DanmakuSearchAnime>{};
-    for (final candidate in response.animes) {
-      if (titlesMatch(title, candidate.animeTitle)) {
-        unique[candidate.animeId] = candidate;
-      }
-    }
-    return unique.length == 1 ? unique.values.single : null;
-  }
-
-  static String? _date(String title) {
-    final match = RegExp(
-      r'(20[0-9]{2})[年./-](0?[1-9]|1[0-2])[月./-](0?[1-9]|[12][0-9]|3[01])日?',
-    ).firstMatch(title);
-    if (match == null) return null;
-    final year = match.group(1)!;
-    final month = match.group(2)!.padLeft(2, '0');
-    final day = match.group(3)!.padLeft(2, '0');
-    return '$year-$month-$day';
-  }
-
-  static String _edition(String title) {
-    for (final marker in <String>['加更', '纯享', '特别', '番外', '花絮', '先导']) {
-      if (title.contains(marker)) return marker;
-    }
-    return '正片';
-  }
-
-  static int? _episodeNumber(String title) {
-    final chinese = RegExp(r'第\s*0*([0-9]{1,4})\s*[集话期]').firstMatch(title);
-    if (chinese != null) return int.tryParse(chinese.group(1)!);
-    final english = RegExp(
-      r'(?:^|[\s_.-])(?:ep|episode|e)\s*0*([0-9]{1,4})(?:\b|$)',
-      caseSensitive: false,
-    ).firstMatch(title);
-    return english == null ? null : int.tryParse(english.group(1)!);
-  }
-
-  /// Only bind a confidently identified episode. A numeric position in an
-  /// unordered/variant episode list is not a reliable episode identity.
-  static int? selectEpisodeId(
-    List<DanmakuEpisode> entries,
-    int episode, {
-    String episodeTitle = '',
-  }) {
-    if (episode < 1 || entries.isEmpty) return null;
-    final requestedEdition = _edition(episodeTitle);
-    final requestedDate = _date(episodeTitle);
-    final matches = entries.where((entry) {
-      if (_edition(entry.episodeTitle) != requestedEdition) return false;
-      if (requestedDate != null) return _date(entry.episodeTitle) == requestedDate;
-      return _episodeNumber(entry.episodeTitle) == episode;
-    }).toList();
-    if (matches.length == 1) return matches.single.episodeId;
-    if (matches.isNotEmpty || requestedDate != null) return null;
-    // A movie or a genuinely single-part work has an unambiguous lone entry.
-    if (episode == 1 && entries.length == 1 &&
-        _edition(entries.single.episodeTitle) == requestedEdition &&
-        _episodeNumber(entries.single.episodeTitle) == null) {
-      return entries.single.episodeId;
-    }
-    return null;
-  }
-
-  static Future<List<DanmakuEntry>> fetchBilibili(
-      BilibiliVideoRef video) async {
-    final view = await DioFactory.apiDio.get(
-      'https://api.bilibili.com/x/web-interface/view',
-      queryParameters: video.viewParams,
-      options: Options(headers: {'referer': 'https://www.bilibili.com/'}),
-    ).timeout(const Duration(seconds: 10));
-    final json = view.data;
-    if (json is! Map || json['code'] != 0 || json['data'] is! Map) return [];
-    final data = json['data'] as Map;
-    final rawPages = data['pages'];
-    int? cid;
-    if (rawPages is List) {
-      if (video.page > rawPages.length) return [];
-      final requested = rawPages[video.page - 1];
-      if (requested is Map) cid = (requested['cid'] as num?)?.toInt();
-    } else if (video.page == 1) {
-      cid = (data['cid'] as num?)?.toInt();
-    }
-    if (cid == null || cid <= 0) return [];
-    final response = await DioFactory.apiDio.get(
-      'https://comment.bilibili.com/$cid.xml',
-      options: Options(
-        responseType: ResponseType.plain,
-        headers: {'referer': 'https://www.bilibili.com/'},
-      ),
-    ).timeout(const Duration(seconds: 10));
-    return parseBilibiliXml(response.data.toString());
-  }
-
-  /// Bilibili uses time,mode,font,color,...; DanDanPlay uses another layout.
-  static List<DanmakuEntry> parseBilibiliXml(String xml) {
-    final parsed = html_parser.parse(xml);
-    final entries = <DanmakuEntry>[];
-    for (final element in parsed.querySelectorAll('d[p]')) {
-      final parts = (element.attributes['p'] ?? '').split(',');
-      if (parts.length < 4) continue;
-      final time = double.tryParse(parts[0]);
-      final mode = int.tryParse(parts[1]);
-      final rgb = int.tryParse(parts[3]);
-      if (time == null || !time.isFinite || time < 0 ||
-          mode == null || rgb == null) {
-        continue;
-      }
-      // Do not run unsupported advanced or reverse modes as ordinary text.
-      if (mode != 1 && mode != 4 && mode != 5) continue;
-      final message = element.text.trim();
-      if (message.isEmpty) continue;
-      entries.add(DanmakuEntry(
-        message: message,
-        time: time,
-        type: mode,
-        color: generateDanmakuColor(rgb),
-        source: 'BiliBili',
-      ));
-    }
-    return entries;
-  }
-}
-), '');
-    return base.replace(
-      path: '$prefix$path',
-      queryParameters: query,
-    );
+        (base.scheme != 'https' && base.scheme != 'http')) return null;
+    final prefix = base.path.endsWith('/')
+        ? base.path.substring(0, base.path.length - 1) : base.path;
+    return base.replace(path: '$prefix$path', queryParameters: query);
   }
 
   static List<DanmakuEntry> parseCommunityComments(dynamic data) {
@@ -328,91 +143,80 @@ class MediaDanmakuService {
     for (final item in raw) {
       if (item is! Map) continue;
       try {
-        final comment = DanmakuEntry.fromJson(Map<String, dynamic>.from(item));
-        if (comment.message.trim().isNotEmpty && comment.time.isFinite &&
-            comment.time >= 0) {
-          result.add(comment);
-        }
+        final entry = DanmakuEntry.fromJson(Map<String, dynamic>.from(item));
+        if (entry.message.trim().isNotEmpty && entry.time.isFinite &&
+            entry.time >= 0) result.add(entry);
       } catch (_) {
-        // Skip malformed comments instead of hiding an otherwise valid pool.
+        // One invalid comment must not discard the entire episode.
       }
     }
     return result;
   }
 
-  static Future<dynamic> _getCommunity(
+  static Future<dynamic> _communityGet(
       String path, Map<String, String> query) async {
     final uri = communityUri(path, query);
     if (uri == null) return null;
-    final response = await DioFactory.apiDio.getUri(
-      uri,
-      options: Options(
-        receiveTimeout: const Duration(seconds: 8),
-        sendTimeout: const Duration(seconds: 8),
-      ),
-    ).timeout(const Duration(seconds: 10));
-    return response.data;
+    return (await DioFactory.apiDio.getUri(uri,
+      options: Options(receiveTimeout: const Duration(seconds: 8)),
+    ).timeout(const Duration(seconds: 10))).data;
   }
 
   static Future<MediaDanmakuMatch?> _matchCommunity({
     required String title,
     required Iterable<String> titleAliases,
     required Iterable<String> pageUrls,
-    required int episode,
     required String episodeTitle,
+    required int episode,
   }) async {
-    // Only send known first-party VOD page URLs. A rule's arbitrary website or
-    // a signed playback URL must never be sent to an external comment server.
-    const platformHosts = {
+    // Only first-party VOD page URLs are shared with the aggregator.
+    // Never send signed stream links or third-party rule page URLs.
+    const videoHosts = {
       'v.qq.com', 'www.iqiyi.com', 'www.mgtv.com',
       'v.youku.com', 'www.bilibili.com', 'www.miguvideo.com',
     };
-    for (final pageUrl in pageUrls) {
-      final page = Uri.tryParse(pageUrl.trim());
+    for (final url in pageUrls) {
+      final page = Uri.tryParse(url.trim());
       if (page == null || page.scheme != 'https' ||
-          !platformHosts.contains(page.host.toLowerCase())) continue;
+          !videoHosts.contains(page.host.toLowerCase())) continue;
       try {
-        final response = await _getCommunity(
-            '/api/v2/comment', {'url': page.toString(), 'format': 'json'});
-        final comments = parseCommunityComments(response);
+        final data = await _communityGet('/api/v2/comment',
+            {'url': page.toString(), 'format': 'json'});
+        final comments = parseCommunityComments(data);
         if (comments.isNotEmpty) return MediaDanmakuMatch(comments);
       } catch (error) {
-        KazumiLogger().w('CommunityDanmaku: platform URL lookup failed',
-            error: error);
+        KazumiLogger().w('CommunityDanmaku: URL lookup failed', error: error);
       }
     }
 
-    final queried = <String>{};
+    final searched = <String>{};
     for (final candidate in <String>[title, ...titleAliases]) {
-      final keyword = candidate.trim();
-      if (keyword.isEmpty || !queried.add(normalizeTitle(keyword))) continue;
-      if (queried.length > 3) break;
+      final query = candidate.trim();
+      if (query.isEmpty || !searched.add(normalizeTitle(query))) continue;
+      if (searched.length > 3) break;
       try {
-        final searchData = await _getCommunity('/api/v2/search/episodes',
-            {'anime': keyword, 'episode': '$episode'});
-        if (searchData is! Map || searchData['animes'] is! List) continue;
-        final search = DanmakuSearchResponse.fromJson(
-            Map<String, dynamic>.from(searchData));
-        final anime = selectAnime(search, keyword);
-        if (anime == null) continue;
-        final detailsData = await _getCommunity(
-            '/api/v2/bangumi/' + anime.animeId.toString(), const {});
-        if (detailsData is! Map || detailsData['bangumi'] is! Map) continue;
-        final details = DanmakuEpisodeResponse.fromJson(
-            Map<String, dynamic>.from(detailsData));
+        final rawSearch = await _communityGet(
+            '/api/v2/search/episodes', {'anime': query, 'episode': '$episode'});
+        if (rawSearch is! Map || rawSearch['animes'] is! List) continue;
+        final response = DanmakuSearchResponse.fromJson(
+            Map<String, dynamic>.from(rawSearch));
+        final show = selectAnime(response, query);
+        if (show == null) continue;
+        final rawDetail = await _communityGet(
+            '/api/v2/bangumi/' + show.animeId.toString(), const {});
+        if (rawDetail is! Map || rawDetail['bangumi'] is! Map) continue;
+        final detail = DanmakuEpisodeResponse.fromJson(
+            Map<String, dynamic>.from(rawDetail));
         final episodeId = selectEpisodeId(
-          details.episodes, episode, episodeTitle: episodeTitle);
+            detail.episodes, episode, episodeTitle: episodeTitle);
         if (episodeId == null) continue;
-        final commentsData = await _getCommunity(
-          '/api/v2/comment/$episodeId',
-          const {'format': 'json', 'withRelated': 'true'},
-        );
-        final comments = parseCommunityComments(commentsData);
+        final comments = parseCommunityComments(await _communityGet(
+            '/api/v2/comment/$episodeId', const {'format': 'json'}));
         if (comments.isNotEmpty) {
-          return MediaDanmakuMatch(comments, dandanId: anime.animeId);
+          return MediaDanmakuMatch(comments, dandanId: show.animeId);
         }
       } catch (error) {
-        KazumiLogger().w('CommunityDanmaku: title/episode lookup failed',
+        KazumiLogger().w('CommunityDanmaku: episode lookup failed',
             error: error);
       }
     }
