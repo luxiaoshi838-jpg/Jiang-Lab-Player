@@ -76,8 +76,10 @@ class DefaultCmsSources {
       if (endpoint == null) continue;
       final host = Uri.parse(endpoint).host.toLowerCase();
       if (!hosts.add(host)) continue;
-      final displayName = 'CMS · ' +
-          (site['key'] ?? host).toString().replaceAll(RegExp(r'[^\w\u4e00-\u9fa5]'), '');
+      final sourceKey = (site['key'] ?? host)
+          .toString()
+          .replaceAll(RegExp(r'[^\w\u4e00-\u9fa5]'), '');
+      final displayName = 'CMS · $sourceKey';
       result.add(createPlugin(name: displayName, endpoint: endpoint));
       if (result.length >= maxSources) break;
     }
