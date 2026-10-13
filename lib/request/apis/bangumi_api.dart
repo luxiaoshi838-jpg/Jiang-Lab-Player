@@ -16,6 +16,7 @@ import 'package:kazumi/modules/bangumi/bangumi_collection_type.dart';
 import 'package:kazumi/modules/comments/comment_item.dart';
 import 'package:kazumi/utils/search_parser.dart';
 import 'package:kazumi/utils/async_rate_limiter.dart';
+import 'package:kazumi/pages/popular/home_media_category.dart';
 
 class BangumiSearchPage {
   const BangumiSearchPage({
@@ -216,50 +217,78 @@ class BangumiApi {
     return bangumiList;
   }
 
-  // One recommendation ranking strategy across all home video categories.
+  /// Genre queries use the same popularity ranking as the original search.
+  /// Bangumi combines multiple 'tag' values with AND; alternate work-kind
+  /// tags are queried independently to avoid requiring all aliases at once.
+  static Map<String, dynamic> buildHomeRecommendationParams({
+    required HomeMediaCategory category,
+    required String workKindTag,
+    String subcategory = '',
+  }) {
+    if (!category.supportsSubcategory(subcategory)) {
+      throw ArgumentError.value(subcategory, 'subcategory');
+    }
+    if (!category.genreTags.contains(workKindTag) &&
+        !(category == HomeMediaCategory.anime && workKindTag.isEmpty)) {
+      throw ArgumentError.value(workKindTag, 'workKindTag');
+    }
+    final tags = category.combinedTags(workKindTag, subcategory);
+    return {
+      'keyword': '',
+      'sort': 'heat',
+      'filter': {
+        'type': [category.subjectType],
+        if (tags.isNotEmpty) 'tag': tags,
+        'nsfw': false,
+      },
+    };
+  }
+
   static Future<List<BangumiItem>> getHomeRecommendations({
-    required int subjectType,
-    List<String> genreTags = const <String>[],
+    required HomeMediaCategory category,
+    String subcategory = '',
     int count = 12,
   }) async {
-    final chosen = <BangumiItem>[];
-    final known = <int>{};
-    final tags = genreTags.isEmpty ? <String>[''] : genreTags;
-    for (final tag in tags) {
-      if (chosen.length >= count) break;
+    final selected = <BangumiItem>[];
+    final ids = <int>{};
+    final kindTags = category.genreTags.isEmpty
+        ? const <String>['']
+        : category.genreTags;
+    for (final kindTag in kindTags) {
+      if (selected.length >= count) break;
       try {
         final response = await _client.post(
           ApiEndpoints.formatUrl(
             ApiEndpoints.bangumiAPIDomain + ApiEndpoints.bangumiRankSearch,
             [100, 0],
           ),
-          data: {
-            'keyword': '',
-            'sort': 'heat',
-            'filter': {
-              'type': [subjectType],
-              if (tag.isNotEmpty) 'tag': [tag],
-              'nsfw': false,
-            }
-          },
+          data: buildHomeRecommendationParams(
+            category: category,
+            workKindTag: kindTag,
+            subcategory: subcategory,
+          ),
         );
         final rows = response['data'];
         if (rows is! List) continue;
         for (final row in rows) {
           if (row is! Map<String, dynamic>) continue;
-          final entry = BangumiItem.fromJson(row);
-          if (entry.type == subjectType &&
-              (entry.name.isNotEmpty || entry.nameCn.isNotEmpty) &&
-              known.add(entry.id)) {
-            chosen.add(entry);
+          try {
+            final item = BangumiItem.fromJson(row);
+            if (item.type == category.subjectType &&
+                (item.name.isNotEmpty || item.nameCn.isNotEmpty) &&
+                ids.add(item.id)) {
+              selected.add(item);
+            }
+          } catch (error) {
+            KazumiLogger().w('Home entry could not be parsed', error: error);
           }
-          if (chosen.length >= count) break;
+          if (selected.length >= count) break;
         }
       } catch (error) {
-        KazumiLogger().w('Home recommendation lookup failed', error: error);
+        KazumiLogger().w('Home category lookup failed', error: error);
       }
     }
-    return chosen.take(count).toList();
+    return selected.take(count).toList(growable: false);
   }
 
   static String buildBangumiMirrorPopularPath({
