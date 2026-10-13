@@ -174,7 +174,7 @@ class ApiRuleStrategy {
                 node, config.imagePath));
         final imageUri = Uri.tryParse(imageUrl);
         final safeImage = imageUri != null &&
-                imageUri.scheme == 'https' &&
+                (imageUri.scheme == 'https' || imageUri.scheme == 'http') &&
                 imageUri.host.isNotEmpty &&
                 imageUri.userInfo.isEmpty &&
                 imageUri.host != 'localhost' &&
