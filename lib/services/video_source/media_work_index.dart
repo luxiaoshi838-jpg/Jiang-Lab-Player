@@ -92,10 +92,17 @@ class MediaWorkIndex {
     final match = uniqueMatch(works, title, year: year);
     if (match != null) {
       addCandidate(match, candidate);
+      // Genuine subject metadata wins. Fill only a genuinely missing cover.
+      if ((match.images['large'] ?? '').isEmpty &&
+          candidate.imageUrl.isNotEmpty) {
+        match.images['large'] = candidate.imageUrl;
+        match.images['common'] = candidate.imageUrl;
+      }
       return;
     }
     final shell = BangumiItem.fromRule(
       pluginName: candidate.pluginName, source: candidate.url, title: title,
+      imageUrl: candidate.imageUrl,
     );
     addCandidate(shell, candidate);
     works.add(shell);
