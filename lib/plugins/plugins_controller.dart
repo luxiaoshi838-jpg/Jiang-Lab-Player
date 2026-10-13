@@ -161,7 +161,7 @@ abstract class _PluginsController with Store {
   Future<void> _bootstrapDefaultCmsSources() async {
     final directory = newPluginDirectory;
     if (directory == null) return;
-    final marker = File(directory.path + '/cms_v10_auto_sources_v1');
+    final marker = File('${directory.path}/cms_v10_auto_sources_v1');
     if (await marker.exists()) return;
     try {
       final candidates = await DefaultCmsSources.fetch();
