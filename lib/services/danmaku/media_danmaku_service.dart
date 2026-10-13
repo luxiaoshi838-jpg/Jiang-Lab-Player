@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:kazumi/modules/danmaku/danmaku_module.dart';
@@ -221,6 +222,40 @@ class MediaDanmakuService {
     ).timeout(const Duration(seconds: 10))).data;
   }
 
+  /// The public danmu.icu service matches official pages and selected
+  /// public slice-playback URLs. Never transmit local files, private hosts,
+  /// URL credentials, signed media parameters or private user tokens.
+  static Uri? publicDanmakuVideoUrl(String url) {
+    final uri = Uri.tryParse(url.trim());
+    if (uri == null || uri.scheme != 'https' ||
+        uri.host.isEmpty || uri.userInfo.isNotEmpty ||
+        uri.fragment.isNotEmpty || uri.host == 'localhost' ||
+        uri.host.endsWith('.local') ||
+        InternetAddress.tryParse(uri.host) != null) {
+      return null;
+    }
+    const sensitive = {
+      'token', 'auth', 'signature', 'sign', 'expires', 'expire',
+      'key', 'password', 'session', 'access_token', 'apikey',
+    };
+    if (uri.queryParameters.keys.any((k) => sensitive.contains(k.toLowerCase()))) {
+      return null;
+    }
+    const official = {
+      'v.qq.com', 'www.iqiyi.com', 'www.mgtv.com',
+      'v.youku.com', 'www.bilibili.com', 'www.miguvideo.com',
+    };
+    final path = uri.path.toLowerCase();
+    final knownSlice = path.endsWith('.m3u8') ||
+        path.endsWith('.mp4') || path.endsWith('.m4v');
+    if (!official.contains(uri.host.toLowerCase()) && !knownSlice) {
+      return null;
+    }
+    // Strip nonessential query parameters from slice URLs: they may carry
+    // transient CDN tracking identifiers even when not named as secrets.
+    return knownSlice ? uri.replace(query: '') : uri;
+  }
+
   static Future<MediaDanmakuMatch?> _matchCommunity({
     required String title,
     required Iterable<String> titleAliases,
@@ -228,18 +263,12 @@ class MediaDanmakuService {
     required String episodeTitle,
     required int episode,
   }) async {
-    // Only first-party VOD page URLs are shared with the aggregator.
-    // Never send signed stream links or third-party rule page URLs.
-    const videoHosts = {
-      'v.qq.com', 'www.iqiyi.com', 'www.mgtv.com',
-      'v.youku.com', 'www.bilibili.com', 'www.miguvideo.com',
-    };
+    // Use recognized official VOD pages and safe public slice URLs.
+    // CMS streams can carry the original playback identity which the
+    // public library supports, but signed/private links are never sent.
     for (final url in pageUrls) {
-      final page = Uri.tryParse(url.trim());
-      if (page == null || page.scheme != 'https' ||
-          !videoHosts.contains(page.host.toLowerCase())) {
-        continue;
-      }
+      final page = publicDanmakuVideoUrl(url);
+      if (page == null) continue;
       try {
         // The public danmu.icu server uses a different, XML-based URL API.
         // A self-hosted danmu_api instance exposes DanDanPlay JSON endpoints.
@@ -387,6 +416,103 @@ class MediaDanmakuService {
   static int? _episodeNumber(String title) {
     final chinese = RegExp(r'第\s*0*([0-9]{1,4})\s*[集话期]').firstMatch(title);
     if (chinese != null) return int.tryParse(chinese.group(1)!);
+    // Real TV/CMS episode lists often label an episode only "01" or "1".
+    // We still require an unambiguous single episode-ID match below.
+    final bare = RegExp(r'^\\s*0*([0-9]{1,4})\\s*
+    final english = RegExp(
+      r'(?:^|[\s_.-])(?:ep|episode|e)\s*0*([0-9]{1,4})(?:\b|$)',
+      caseSensitive: false,
+    ).firstMatch(title);
+    return english == null ? null : int.tryParse(english.group(1)!);
+  }
+
+  /// Only bind a confidently identified episode. A numeric position in an
+  /// unordered/variant episode list is not a reliable episode identity.
+  static int? selectEpisodeId(
+    List<DanmakuEpisode> entries,
+    int episode, {
+    String episodeTitle = '',
+  }) {
+    if (episode < 1 || entries.isEmpty) return null;
+    final requestedEdition = _edition(episodeTitle);
+    final requestedDate = _date(episodeTitle);
+    final matches = entries.where((entry) {
+      if (_edition(entry.episodeTitle) != requestedEdition) return false;
+      if (requestedDate != null) return _date(entry.episodeTitle) == requestedDate;
+      return _episodeNumber(entry.episodeTitle) == episode;
+    }).toList();
+    if (matches.length == 1) return matches.single.episodeId;
+    if (matches.isNotEmpty || requestedDate != null) return null;
+    // A movie or a genuinely single-part work has an unambiguous lone entry.
+    if (episode == 1 && entries.length == 1 &&
+        _edition(entries.single.episodeTitle) == requestedEdition &&
+        _episodeNumber(entries.single.episodeTitle) == null) {
+      return entries.single.episodeId;
+    }
+    return null;
+  }
+
+  static Future<List<DanmakuEntry>> fetchBilibili(
+      BilibiliVideoRef video) async {
+    final view = await DioFactory.apiDio.get(
+      'https://api.bilibili.com/x/web-interface/view',
+      queryParameters: video.viewParams,
+      options: Options(headers: {'referer': 'https://www.bilibili.com/'}),
+    ).timeout(const Duration(seconds: 10));
+    final json = view.data;
+    if (json is! Map || json['code'] != 0 || json['data'] is! Map) return [];
+    final data = json['data'] as Map;
+    final rawPages = data['pages'];
+    int? cid;
+    if (rawPages is List) {
+      if (video.page > rawPages.length) return [];
+      final requested = rawPages[video.page - 1];
+      if (requested is Map) cid = (requested['cid'] as num?)?.toInt();
+    } else if (video.page == 1) {
+      cid = (data['cid'] as num?)?.toInt();
+    }
+    if (cid == null || cid <= 0) return [];
+    final response = await DioFactory.apiDio.get(
+      'https://comment.bilibili.com/$cid.xml',
+      options: Options(
+        responseType: ResponseType.plain,
+        headers: {'referer': 'https://www.bilibili.com/'},
+      ),
+    ).timeout(const Duration(seconds: 10));
+    return parseBilibiliXml(response.data.toString());
+  }
+
+  /// Bilibili uses time,mode,font,color,...; DanDanPlay uses another layout.
+  static List<DanmakuEntry> parseBilibiliXml(String xml) {
+    final parsed = html_parser.parse(xml);
+    final entries = <DanmakuEntry>[];
+    for (final element in parsed.querySelectorAll('d[p]')) {
+      final parts = (element.attributes['p'] ?? '').split(',');
+      if (parts.length < 4) continue;
+      final time = double.tryParse(parts[0]);
+      final mode = int.tryParse(parts[1]);
+      final rgb = int.tryParse(parts[3]);
+      if (time == null || !time.isFinite || time < 0 ||
+          mode == null || rgb == null) {
+        continue;
+      }
+      // Do not run unsupported advanced or reverse modes as ordinary text.
+      if (mode != 1 && mode != 4 && mode != 5) continue;
+      final message = element.text.trim();
+      if (message.isEmpty) continue;
+      entries.add(DanmakuEntry(
+        message: message,
+        time: time,
+        type: mode,
+        color: generateDanmakuColor(rgb),
+        source: 'BiliBili',
+      ));
+    }
+    return entries;
+  }
+}
+).firstMatch(title);
+    if (bare != null) return int.tryParse(bare.group(1)!);
     final english = RegExp(
       r'(?:^|[\s_.-])(?:ep|episode|e)\s*0*([0-9]{1,4})(?:\b|$)',
       caseSensitive: false,
