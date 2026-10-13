@@ -186,10 +186,29 @@ class MediaDanmakuService {
       if (page == null || page.scheme != 'https' ||
           !videoHosts.contains(page.host.toLowerCase())) continue;
       try {
-        final data = await _communityGet('/api/v2/comment',
-            {'url': page.toString(), 'format': 'json'});
-        final comments = parseCommunityComments(data);
-        if (comments.isNotEmpty) return MediaDanmakuMatch(comments);
+        // The public danmu.icu server uses a different, XML-based URL API.
+        // A self-hosted danmu_api instance exposes DanDanPlay JSON endpoints.
+        if (Uri.parse(communityDanmakuApi).host == 'api.danmu.icu') {
+          final uri = communityUri('/', {'ac': 'dm', 'url': page.toString()});
+          if (uri != null) {
+            final response = await DioFactory.apiDio.getUri(
+              uri,
+              options: Options(responseType: ResponseType.plain,
+                  receiveTimeout: const Duration(seconds: 8)),
+            ).timeout(const Duration(seconds: 10));
+            final comments = parseBilibiliXml(response.data.toString());
+            if (comments.isNotEmpty) {
+              return MediaDanmakuMatch(comments);
+            }
+          }
+        } else {
+          final data = await _communityGet('/api/v2/comment',
+              {'url': page.toString(), 'format': 'json'});
+          final comments = parseCommunityComments(data);
+          if (comments.isNotEmpty) {
+            return MediaDanmakuMatch(comments);
+          }
+        }
       } catch (error) {
         KazumiLogger().w('CommunityDanmaku: URL lookup failed', error: error);
       }
