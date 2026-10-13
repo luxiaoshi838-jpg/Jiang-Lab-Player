@@ -47,6 +47,25 @@ void main() {
     expect(works.single.discoveredSources, hasLength(2));
   });
 
+  test('bracketed year result attaches only to compatible catalog edition', () {
+    final item = subject('亮剑', 127, date: '2005-09-12');
+    final works = <BangumiItem>[item];
+    MediaWorkIndex.addRuleHit(works, const MediaSourceCandidate(
+      pluginName: 'source',
+      title: '亮剑（2005）',
+      url: 'https://videos.example/lj2005',
+    ));
+    expect(works, hasLength(1));
+    expect(item.discoveredSources, hasLength(1));
+    MediaWorkIndex.addRuleHit(works, const MediaSourceCandidate(
+      pluginName: 'source',
+      title: '亮剑（2015）',
+      url: 'https://videos.example/lj2015',
+    ));
+    expect(works, hasLength(2));
+    expect(item.discoveredSources, hasLength(1));
+  });
+
   test('names in different seasons are never collapsed', () {
     final works = <BangumiItem>[];
     MediaWorkIndex.addRuleHit(works, const MediaSourceCandidate(

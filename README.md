@@ -22,6 +22,15 @@ Windows PC 与 Android **通用视频播放器**（基于 [Kazumi](https://githu
 - **原有弹幕能力保留并扩展到非直播视频**：真实 Bangumi 动画仍按原 ID 自动加载；B 站普通 BV/av 视频尝试按实际 CID 读取原站弹幕；其他作品尝试弹弹play 的严格同名/同集匹配，且保留原手动查找、切换、屏蔽和设置。直播弹幕不适配。对缺乏开放接口、需要登录或原站受限的视频，不能承诺全部弹幕均可读取。
 - 来源规则与播放器仍需支持视频的网页解析、协议、登录状态及授权；**“支持所有非直播视频类型”是内容类别不设限制，不等于能绕过 DRM 或播放任意网站链接**。
 
+## Windows 和 Android 安装版（2.3.9）
+
+- **Windows**：生成 `Suibo-Setup-2.3.9-Windows-x64.exe`，使用 Inno Setup 6 安装，完整捆绑 Flutter 原生 DLL/资源。后续安装版统一使用固定 AppId，可在相同安装目录就地升级；保留应用数据。**不是仅拷贝 suibo.exe 的随用版。**
+- **Android**：使用私有 Google Drive 的原始正式密钥 ZIP，构建 `com.jianglab.suibo` 的已签名 APK，版本号 `2.3.9+20309`。升级需保证旧版和新版**包名相同、签名证书相同、新版 versionCode 更大**。
+- Windows 本地私有构建：`powershell -ExecutionPolicy Bypass -File scripts/build_windows_installer.ps1 -OutputDirectory C:\\Private\\SuiboReleases`（Windows、Flutter、VS C++、Inno Setup 6）。
+- Android 本地私有构建：`python scripts/private_android_release.py --keys "/PRIVATE/随播_Android_正式签名密钥_20261010.zip" --output-dir "/PRIVATE/SuiboReleases"`（Flutter、JDK、Android SDK）。
+- 原**随用版**不具备 Windows Installer 卸载记录，新安装版不会直接删除其未知目录，但不会清理已有 AppData。Windows EXE 尚无 Authenticode 代码签名，Android JKS **不能**给 Windows EXE 签名。
+- 安装包只能在私有受控构建机生成并交付，不上传到本公开 GitHub Releases/Actions Artifacts。CI 通过不等于真实安装包已向用户交付。
+
 ## 首次导入源码
 
 `.github/workflows/bootstrap.yml` 从指定 Kazumi 上游提交复制源代码，执行 `scripts/prepare_suibo.py` 的品牌与平台适配，并构建 Android 与 Windows；仓库已有源码后不会覆盖本项目改造。

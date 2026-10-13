@@ -16,7 +16,21 @@ void main() {
     expect(item, isNotNull);
     expect(item!.name, '一饭封神');
     expect(item.isExternal, isTrue);
-    expect(item.summary, contains('不是播放链接'));
+    expect(item.summary, contains('暂无剧情简介'));
+  });
+  test('encyclopedia extracts become real description, not fake playback link', () {
+    final data = page('亮剑', ['中国大陆电视剧']);
+    final pages = (data['query'] as Map)['pages'] as List;
+    (pages.first as Map)['extract'] = '《亮剑》是中国大陆电视剧。';
+    (pages.first as Map)['thumbnail'] = {
+      'source': 'https://upload.wikimedia.org/example.jpg'
+    };
+    final item = PublicVideoCatalog.parseExactTitle(data, '亮剑');
+    expect(item, isNotNull);
+    expect(item!.summary, contains('中国大陆电视剧'));
+    expect(item.summary, contains('维基百科'));
+    expect(item.images['large'], contains('https://'));
+    expect(item.isExternal, isTrue);
   });
   test('both historical dramas qualify', () {
     for (final title in ['亮剑', '大明王朝1566']) {

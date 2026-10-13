@@ -4,14 +4,19 @@ enum PluginSearchStatus { pending, success, error, noResult, captcha }
 class SearchItem {
   String name;
   String src;
+  String imageUrl;
 
   SearchItem({
     required this.name,
     required this.src,
+    this.imageUrl = '',
   });
 
   factory SearchItem.fromJson(Map<String, dynamic> json) {
-    return SearchItem(name: json['name'], src: json['src']);
+    return SearchItem(
+      name: json['name'], src: json['src'],
+      imageUrl: json['imageUrl'] as String? ?? '',
+    );
   }
 }
 
