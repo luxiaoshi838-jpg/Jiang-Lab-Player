@@ -179,7 +179,11 @@ class ApiRuleStrategy {
                 imageUri.userInfo.isEmpty &&
                 imageUri.host != 'localhost' &&
                 !imageUri.host.endsWith('.local') &&
-                !RegExp(r'^[0-9.]+
+                !imageUri.host.contains(':') &&
+                !imageUri.host.split('.').every(
+                    (part) => int.tryParse(part) != null) &&
+                (!imageUri.hasPort || imageUri.port == 443)
+            ? imageUrl
             : '';
         results.add(SearchItem(
           name: name, src: source, imageUrl: safeImage));
