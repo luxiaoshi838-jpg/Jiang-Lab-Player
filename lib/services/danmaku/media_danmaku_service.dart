@@ -104,6 +104,7 @@ class MediaDanmakuService {
           error: error,
         );
       }
+    }
 
     // Some films, TV series and variety shows have no matching DanDanPlay
     // entry. A compatible community server can supply comments collected from
