@@ -175,8 +175,9 @@ class MediaDanmakuService {
         _ => 1,
       };
       final rawColor = row[3].toString();
-      final rgb = int.tryParse(rawColor.replaceFirst('#', ''), radix: 16) ??
-          int.tryParse(rawColor) ?? 0xFFFFFF;
+      final rgb = rawColor.startsWith('#')
+          ? int.tryParse(rawColor.substring(1), radix: 16) ?? 0xFFFFFF
+          : int.tryParse(rawColor) ?? 0xFFFFFF;
       results.add(DanmakuEntry(
         message: message,
         time: time,
