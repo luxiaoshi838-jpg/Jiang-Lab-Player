@@ -184,7 +184,9 @@ class MediaDanmakuService {
     for (final url in pageUrls) {
       final page = Uri.tryParse(url.trim());
       if (page == null || page.scheme != 'https' ||
-          !videoHosts.contains(page.host.toLowerCase())) continue;
+          !videoHosts.contains(page.host.toLowerCase())) {
+        continue;
+      }
       try {
         // The public danmu.icu server uses a different, XML-based URL API.
         // A self-hosted danmu_api instance exposes DanDanPlay JSON endpoints.
