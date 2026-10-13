@@ -10,6 +10,10 @@ import 'package:kazumi/plugins/plugins.dart';
 class DefaultCmsSources {
   static const catalogUrl =
       'https://raw.githubusercontent.com/25175/tvyuan/master/tvbox.json';
+  static const catalogMirrors = <String>[
+    catalogUrl,
+    'https://gitee.com/onm-hundred-and-eleven/tvyuan/raw/main/tvbox.json',
+  ];
   static const maxSources = 4;
   static const maxCatalogBytes = 256 * 1024;
 
@@ -126,9 +130,23 @@ class DefaultCmsSources {
     final http = client ?? (HttpClient()
       ..connectionTimeout = const Duration(seconds: 5));
     try {
-      final request = await http.getUrl(Uri.parse(catalogUrl))
+      // Use GitHub and its domestic Gitee mirror in parallel. A blocked
+      // githubusercontent domain must not result in empty first-run sources.
+      final attempts = await Future.wait(
+        catalogMirrors.map((url) => _download(http, url)));
+      for (final plugins in attempts) {
+        if (plugins.isNotEmpty) return plugins;
+      }
+      return const <Plugin>[];
+    } finally {
+      if (client == null) http.close(force: true);
+    }
+  }
+
+  static Future<List<Plugin>> _download(HttpClient http, String url) async {
+    try {
+      final request = await http.getUrl(Uri.parse(url))
           .timeout(const Duration(seconds: 6));
-      request.followRedirects = false;
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
       final response = await request.close()
           .timeout(const Duration(seconds: 6));
@@ -141,8 +159,7 @@ class DefaultCmsSources {
       return parse(jsonDecode(utf8.decode(bytes)));
     } catch (_) {
       return const <Plugin>[];
-    } finally {
-      if (client == null) http.close(force: true);
     }
   }
+
 }
