@@ -208,6 +208,7 @@ abstract class _SearchPageController with Store {
             pluginName: batch[i].name,
             title: title,
             url: result.src,
+            imageUrl: result.imageUrl,
           ));
         }
       }
