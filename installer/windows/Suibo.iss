@@ -27,7 +27,7 @@ UsePreviousAppDir=yes
 PrivilegesRequired=lowest
 OutputDir={#InstallerOutputDir}
 OutputBaseFilename=Suibo-Setup-{#MyAppVersion}-Windows-x64
-UninstallDisplayIcon={app}\suibo.exe
+UninstallDisplayIcon={app}\Suibo-{#MyAppVersion}.ico
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -46,10 +46,11 @@ Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: 
 
 [Files]
 Source: "{#FlutterReleaseDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\..\windows\runner\resources\app_icon.ico"; DestDir: "{app}"; DestName: "Suibo-{#MyAppVersion}.ico"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\随播"; Filename: "{app}\suibo.exe"
-Name: "{autodesktop}\随播"; Filename: "{app}\suibo.exe"; Tasks: desktopicon
+Name: "{autoprograms}\随播"; Filename: "{app}\suibo.exe"; IconFilename: "{app}\Suibo-{#MyAppVersion}.ico"
+Name: "{autodesktop}\随播"; Filename: "{app}\suibo.exe"; IconFilename: "{app}\Suibo-{#MyAppVersion}.ico"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\suibo.exe"; Description: "启动随播"; Flags: nowait postinstall skipifsilent
