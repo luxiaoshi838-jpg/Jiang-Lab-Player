@@ -137,14 +137,14 @@ class CmsHomeCatalog {
       final title = (row['vod_name'] ?? '').toString().trim();
       final id = (row['vod_id'] ?? '').toString().trim();
       if (title.isEmpty || id.isEmpty) continue;
-      final item = BangumiItem.fromRule(
-          pluginName: source.name, source: id, title: title);
       final cover = (row['vod_pic'] ?? '').toString().trim();
       final url = Uri.tryParse(cover);
-      if (url != null && (url.scheme == 'http' || url.scheme == 'https') &&
-          url.host.isNotEmpty && url.userInfo.isEmpty) {
-        item.images['large'] = cover;
-      }
+      final imageUrl = url != null &&
+          (url.scheme == 'http' || url.scheme == 'https') &&
+          url.host.isNotEmpty && url.userInfo.isEmpty ? cover : '';
+      final item = BangumiItem.fromRule(
+          pluginName: source.name, source: id,
+          title: title, imageUrl: imageUrl);
       item.summary = (row['vod_remarks'] ?? row['vod_content'] ?? '')
           .toString().replaceAll(RegExp(r'<[^>]+>'), '').trim();
       result.add(item);
