@@ -14,7 +14,7 @@ class ApiEndpoints {
   static const String sourceUrl = "https://github.com/luxiaoshi838-jpg/Jiang-Lab-Player";
 
   /// 图标作者
-  static const String iconUrl = "https://www.pixiv.net/users/66219277";
+  static const String iconUrl = "https://github.com/luxiaoshi838-jpg/Jiang-Lab-Player";
 
   /// 规则仓库
   static const String pluginShop =

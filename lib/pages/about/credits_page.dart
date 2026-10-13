@@ -23,7 +23,7 @@ class CreditsPage extends StatelessWidget {
                 ),
                 AboutLinkTile(
                   icon: Icons.brush_rounded,
-                  title: '图标作者',
+                  title: '随播图标',
                   subtitle: 'Pixiv',
                   url: ApiEndpoints.iconUrl,
                 ),
