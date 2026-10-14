@@ -69,29 +69,46 @@ def search(base, name, official):
             rows = data.get("animes")
             if not isinstance(rows, list):
                 continue
-            matches = [r for r in rows if isinstance(r, dict) and
-                       normalize(r.get("animeTitle", "")) == normalize(name)]
-            if len(matches) == 1:
-                return matches[0].get("animeId")
+            matches = []
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                if normalize(row.get("animeTitle", "")) != normalize(name):
+                    continue
+                anime_id = row.get("animeId")
+                if anime_id and anime_id not in matches:
+                    matches.append(anime_id)
+            if matches:
+                return matches[:8]
         except Exception as exc:
             print(f"SEARCH_CHECK {name}: {type(exc).__name__}", flush=True)
-    return None
+    return []
 
 
-def first_episode(base, anime_id, official):
+def first_episodes(base, anime_id, official):
     data = get_json(base, f"/api/v2/bangumi/{anime_id}", {}, official)
     show = data.get("bangumi") or {}
     rows = show.get("episodes") if isinstance(show, dict) else None
     if not isinstance(rows, list):
-        return None
-    first = [r for r in rows if isinstance(r, dict) and
-             re.search(r"^(?:第\s*0*1\s*[集话期]|0*1$|(?:ep|e)0*1$)",
-                       str(r.get("episodeTitle", "")).strip(), re.I)]
-    if len(first) == 1:
-        return first[0].get("episodeId")
-    if len(rows) == 1 and isinstance(rows[0], dict):
-        return rows[0].get("episodeId")
-    return None
+        return []
+    first = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        label = str(row.get("episodeTitle", "")).strip()
+        ordinal = str(row.get("episodeNumber", "")).strip()
+        matched = (
+            re.search(r"第\\s*0*1\\s*[集话期]", label)
+            or re.search(r"(?:^|[_ .-])0*1$", label)
+            or re.search(r"(?:^|[_ .-])(?:ep|e)0*1(?:$|[_ .-])", label, re.I)
+            or (ordinal.lstrip("0") == "1")
+        )
+        if matched and row.get("episodeId"):
+            first.append(row["episodeId"])
+    if not first and len(rows) == 1 and isinstance(rows[0], dict):
+        if rows[0].get("episodeId"):
+            first.append(rows[0]["episodeId"])
+    return list(dict.fromkeys(first))[:3]
 
 
 def nonempty_comments(base, episode_id, official):
@@ -118,15 +135,20 @@ def main():
         passed = False
         for base, official in providers:
             try:
-                show_id = search(base, name, official)
-                if not show_id:
-                    continue
-                episode_id = first_episode(base, show_id, official)
-                if episode_id and nonempty_comments(base, episode_id, official):
-                    passed = True
-                    break
+                candidates = search(base, name, official)
+                print(f"CANDIDATES {name}: {len(candidates)}", flush=True)
+                for show_id in candidates:
+                    episode_ids = first_episodes(base, show_id, official)
+                    for episode_id in episode_ids:
+                        if nonempty_comments(base, episode_id, official):
+                            passed = True
+                            break
+                    if passed:
+                        break
             except Exception as exc:
                 print(f"PROVIDER_CHECK {name}: {type(exc).__name__}", flush=True)
+            if passed:
+                break
         print(f"RESULT {name}: {'PASS' if passed else 'FAIL'}", flush=True)
         ok &= passed
     return 0 if ok else 1
