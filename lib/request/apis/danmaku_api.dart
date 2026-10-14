@@ -32,13 +32,42 @@ class DanmakuApi {
   // v2 episode search avoids the anime search's 25-result cap.
   // Fetch full episode lists separately; search results can truncate them.
   static Future<DanmakuSearchResponse> searchAnimes(String title) async {
+    // The same search powers automatic matching and the manual picker.
+    // Keep Kazumi's official search first, then use the documented
+    // compatible title-search endpoint when one was provisioned.
+    if (!DanmakuClient.hasOfficialCredentials &&
+        !DanmakuClient.hasCompatibleProvider) {
+      throw const DanmakuProviderUnavailable();
+    }
     final endPoint =
         ApiEndpoints.dandanAPIDomain + ApiEndpoints.dandanAPISearchEpisodes;
-    final jsonData = await _client.get(
-      endPoint,
-      queryParameters: {'anime': title, 'v2': 'true'},
-    );
-    return DanmakuSearchResponse.fromJson(jsonData);
+    Object? primaryFailure;
+    DanmakuSearchResponse? result;
+    try {
+      final jsonData = await _client.get(
+        endPoint,
+        queryParameters: {'anime': title, 'v2': 'true'},
+      );
+      result = DanmakuSearchResponse.fromJson(jsonData);
+      if (result.animes.isNotEmpty) return result;
+    } catch (error) {
+      primaryFailure = error;
+    }
+
+    // danmu_api supports both /search/episodes and /search/anime.
+    // This is not a call to the public URL-only danmu.icu service.
+    if (DanmakuClient.hasCompatibleProvider) {
+      try {
+        final jsonData = await _client.searchCompatibleTitles(title);
+        final alternative = DanmakuSearchResponse.fromJson(jsonData);
+        if (alternative.animes.isNotEmpty) return alternative;
+        result ??= alternative;
+      } catch (error) {
+        primaryFailure ??= error;
+      }
+    }
+    if (result != null) return result;
+    throw primaryFailure ?? StateError('弹幕搜索没有返回有效数据');
   }
 
   static Future<List<DanmakuEntry>> getDanDanmaku(
