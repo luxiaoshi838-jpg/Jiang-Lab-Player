@@ -4,6 +4,37 @@ import 'package:kazumi/modules/danmaku/danmaku_search_response.dart';
 import 'package:kazumi/services/danmaku/media_danmaku_service.dart';
 
 void main() {
+  test('compatible provider alone enables automatic work-title search', () {
+    expect(MediaDanmakuService.canAutoSearchTitles(
+      officialConfigured: false, compatibleConfigured: true,
+    ), isTrue);
+    expect(MediaDanmakuService.canAutoSearchTitles(
+      officialConfigured: true, compatibleConfigured: false,
+    ), isTrue);
+    expect(MediaDanmakuService.canAutoSearchTitles(
+      officialConfigured: false, compatibleConfigured: false,
+    ), isFalse);
+  });
+
+  test('compatible decorated drama titles match without matching another show', () {
+    const works = DanmakuSearchResponse(
+      animes: [
+        DanmakuSearchAnime(
+          animeId: 9001, animeTitle: '亮剑(2005)【电视剧】from 360',
+          typeDescription: '电视剧', compatibleProvider: true,
+        ),
+        DanmakuSearchAnime(
+          animeId: 9002, animeTitle: '新亮剑(2011)【电视剧】from 360',
+          typeDescription: '电视剧', compatibleProvider: true,
+        ),
+      ],
+      hasMore: false,
+    );
+    expect(MediaDanmakuService.selectAnime(works, '亮剑')?.animeId, 9001);
+    expect(MediaDanmakuService.selectAnime(works, '新亮剑')?.animeId, 9002);
+    expect(MediaDanmakuService.selectAnime(works, '亮剑2'), isNull);
+  });
+
   test('work title matching tolerates punctuation without guessing seasons', () {
     expect(MediaDanmakuService.normalizeTitle('《一饭封神》'), '一饭封神');
     expect(MediaDanmakuService.titlesMatch('一饭封神 第一季', '一饭封神'), isTrue);
