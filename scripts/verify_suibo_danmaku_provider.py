@@ -39,7 +39,7 @@ def get_json(base, path, query, official=False):
             "X-Signature": base64.b64encode(digest).decode(),
         })
     req = Request(url, headers=headers)
-    with urlopen(req, timeout=12) as r:
+    with urlopen(req, timeout=35) as r:
         raw = r.read(8_000_001)
     if len(raw) > 8_000_000:
         raise ValueError("Oversized API response")
@@ -76,8 +76,8 @@ def search(base, name, official):
                 if normalize(row.get("animeTitle", "")) != normalize(name):
                     continue
                 anime_id = row.get("animeId")
-                if anime_id and anime_id not in matches:
-                    matches.append(anime_id)
+                if anime_id and not any(m.get("animeId") == anime_id for m in matches):
+                    matches.append(row)
             if matches:
                 return matches[:8]
         except Exception as exc:
@@ -85,10 +85,13 @@ def search(base, name, official):
     return []
 
 
-def first_episodes(base, anime_id, official):
-    data = get_json(base, f"/api/v2/bangumi/{anime_id}", {}, official)
-    show = data.get("bangumi") or {}
-    rows = show.get("episodes") if isinstance(show, dict) else None
+def first_episodes(base, candidate, official):
+    anime_id = candidate["animeId"]
+    rows = candidate.get("episodes")
+    if not isinstance(rows, list) or not rows:
+        data = get_json(base, f"/api/v2/bangumi/{anime_id}", {}, official)
+        show = data.get("bangumi") or {}
+        rows = show.get("episodes") if isinstance(show, dict) else None
     if not isinstance(rows, list):
         return []
     first = []
@@ -137,14 +140,20 @@ def main():
             try:
                 candidates = search(base, name, official)
                 print(f"CANDIDATES {name}: {len(candidates)}", flush=True)
-                for show_id in candidates:
-                    episode_ids = first_episodes(base, show_id, official)
-                    for episode_id in episode_ids:
-                        if nonempty_comments(base, episode_id, official):
-                            passed = True
+                for candidate in candidates:
+                    try:
+                        episode_ids = first_episodes(base, candidate, official)
+                        for episode_id in episode_ids:
+                            try:
+                                if nonempty_comments(base, episode_id, official):
+                                    passed = True
+                                    break
+                            except Exception as error:
+                                print(f"EPISODE_CHECK {name}: {type(error).__name__}", flush=True)
+                        if passed:
                             break
-                    if passed:
-                        break
+                    except Exception as error:
+                        print(f"DETAIL_CHECK {name}: {type(error).__name__}", flush=True)
             except Exception as exc:
                 print(f"PROVIDER_CHECK {name}: {type(exc).__name__}", flush=True)
             if passed:
