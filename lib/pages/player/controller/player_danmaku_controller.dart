@@ -323,12 +323,18 @@ abstract class _PlayerDanmakuController with Store {
   }
 
   @action
-  Future<bool> getDanDanmakuByEpisodeID(int episodeID) async {
+  Future<bool> getDanDanmakuByEpisodeID(
+    int episodeID, {
+    bool preferCompatible = false,
+  }) async {
     KazumiLogger().i('PlayerController: attempting to get danmaku $episodeID');
     danmakuLoading = true;
     try {
       danDanmakus.clear();
-      var res = await DanmakuApi.getDanDanmakuByEpisodeID(episodeID);
+      var res = await DanmakuApi.getDanDanmakuByEpisodeID(
+        episodeID,
+        preferCompatible: preferCompatible,
+      );
       addDanmakus(res);
       return res.isNotEmpty;
     } catch (e) {
