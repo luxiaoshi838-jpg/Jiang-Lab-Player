@@ -82,7 +82,7 @@ class _HomeRecommendationsState extends State<HomeRecommendations> {
 }
 
 class _HomeSection extends StatelessWidget {
-  const _HomeSection({required this.controller, required this.category});
+  const _HomeSection({super.key, required this.controller, required this.category});
 
   final PopularController controller;
   final HomeMediaCategory category;
