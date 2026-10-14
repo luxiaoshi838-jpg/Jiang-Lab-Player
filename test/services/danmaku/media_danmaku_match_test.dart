@@ -143,6 +143,22 @@ void main() {
     };
     final matched = {'isMatched': true, 'matches': [firstEpisode]};
     expect(MediaDanmakuService.selectCompatibleMatchId(matched, '亮剑', 1), 8301);
+    expect(MediaDanmakuService.selectCompatibleMatchId({
+      'isMatched': true,
+      'matches': [{
+        'animeTitle': '亮剑(2005)【电视剧】from 360',
+        'episodeTitle': '【qiyi】第1集',
+        'episodeId': 8401,
+      }]
+    }, '亮剑', 1), 8401);
+    expect(MediaDanmakuService.selectCompatibleMatchId({
+      'isMatched': true,
+      'matches': [{
+        'animeTitle': '新亮剑(2011)【电视剧】from 360',
+        'episodeTitle': '第1集',
+        'episodeId': 8402,
+      }]
+    }, '亮剑', 1), isNull);
     expect(MediaDanmakuService.selectCompatibleMatchId(matched, '亮剑', 2), isNull);
     expect(MediaDanmakuService.selectCompatibleMatchId(matched, '新亮剑', 1), isNull);
     expect(MediaDanmakuService.selectCompatibleMatchId({
