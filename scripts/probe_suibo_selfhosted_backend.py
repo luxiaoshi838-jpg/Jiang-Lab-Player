@@ -39,9 +39,12 @@ def clean_title(value):
 def main():
     # Only probe the local listener. Do not launch an expensive full-source
     # title search just to test whether the Node process has started.
+    origin = urllib.parse.urlsplit(BASE)
     for attempt in range(25):
         try:
-            with socket.create_connection(("127.0.0.1", 9321), timeout=2):
+            with socket.create_connection(
+                (origin.hostname or "127.0.0.1", origin.port or 80), timeout=2
+            ):
                 break
         except OSError:
             time.sleep(2)
