@@ -488,7 +488,7 @@ class MediaDanmakuService {
     return aBase.isNotEmpty && aBase == bBase;
   }
 
-  /// Never silently select from duplicated titles or a truncated result set.
+  /// Never silently select a truncated or ambiguously matched work.
   static DanmakuSearchAnime? selectAnime(
     DanmakuSearchResponse response,
     String title,
@@ -496,17 +496,24 @@ class MediaDanmakuService {
     if (response.hasMore) return null;
     final unique = <int, DanmakuSearchAnime>{};
     for (final candidate in response.animes) {
-      // Some compatible providers append "(2005)【电视剧】from 360".
-      // Such labels were searchable, but our exact-title rule discarded
-      // them. Remove *only* a recognized provider suffix, preserving other
-      // identity words (e.g. 新亮剑 versus 亮剑). Multiple matches remain
-      // ambiguous and are sent to manual selection instead of guessing.
       var matches = titlesMatch(title, candidate.animeTitle);
       if (!matches && candidate.compatibleProvider) {
-        final decorated = candidate.animeTitle;
-        if (decorated.contains('【') && decorated.contains('】from ')) {
-          final base = decorated.split('【').first.trim().replaceFirst(
-            RegExp(r'[（(](?:19|20)[0-9]{2}[)）]
+        final label = candidate.animeTitle;
+        // A compatible backend may decorate a show with a year, category
+        // and platform. Only remove those suffixes; preserve actual titles.
+        if (label.contains('【') && label.contains('】from ')) {
+          var base = label.split('【').first.trim();
+          final years = RegExp(r'[（(](?:19|20)[0-9]{2}[)）]').allMatches(base).toList();
+          if (years.isNotEmpty && years.last.end == base.length) {
+            base = base.substring(0, years.last.start).trim();
+          }
+          matches = titlesMatch(title, base);
+        }
+      }
+      if (matches) unique[candidate.animeId] = candidate;
+    }
+    return unique.length == 1 ? unique.values.single : null;
+  }
 
   static String? _date(String title) {
     final match = RegExp(
