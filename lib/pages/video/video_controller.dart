@@ -646,6 +646,7 @@ abstract class _VideoPageController with Store implements Disposable {
             episodeTitle: params.episodeTitle,
             titleAliases: [bangumiItem.nameCn, bangumiItem.name],
             pageUrls: [params.pageUrl, src],
+            preferAnimation: true,
           );
           if (matched != null && matched.entries.isNotEmpty) {
             result = DanmakuLoadResult.success(
