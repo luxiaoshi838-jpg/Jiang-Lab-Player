@@ -87,6 +87,22 @@ void main() {
     expect(MediaDanmakuService.selectEpisodeId(episodes, 4), isNull);
   });
 
+  test('real upstream platform-prefixed episode labels are selectable', () {
+    final anime = [
+      DanmakuEpisode(episodeId: 101, episodeTitle: '【youku】 第1集 凡人修仙传 01'),
+      DanmakuEpisode(episodeId: 102, episodeTitle: '【youku】 第2集 凡人修仙传 02'),
+    ];
+    final drama = [
+      DanmakuEpisode(episodeId: 201, episodeTitle: '【qq】 亮剑_01'),
+      DanmakuEpisode(episodeId: 202, episodeTitle: '【qq】 亮剑_02'),
+    ];
+    expect(MediaDanmakuService.selectEpisodeId(anime, 1), 101);
+    expect(MediaDanmakuService.selectEpisodeId(anime, 2), 102);
+    expect(MediaDanmakuService.selectEpisodeId(drama, 1), 201);
+    expect(MediaDanmakuService.selectEpisodeId(drama, 2), 202);
+    expect(MediaDanmakuService.selectEpisodeId(drama, 3), isNull);
+  });
+
   test('numeric episodeNumber from upstream selects an unlabelled drama entry', () {
     final detail = DanmakuEpisodeResponse.fromJson({
       'success': true, 'errorCode': 0, 'errorMessage': '',
