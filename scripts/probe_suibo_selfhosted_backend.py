@@ -6,6 +6,7 @@ Do not log comment bodies, request headers or credentials.
 import json
 import os
 import re
+import socket
 import sys
 import time
 import urllib.error
@@ -36,12 +37,13 @@ def clean_title(value):
     return re.sub(r"[^\w\u4e00-\u9fff]", "", value).lower()
 
 def main():
-    # The Node runner may need a brief startup period, not network search.
+    # Only probe the local listener. Do not launch an expensive full-source
+    # title search just to test whether the Node process has started.
     for attempt in range(25):
         try:
-            fetch("/api/v2/search/anime", {"keyword": "启动检查"})
-            break
-        except (ConnectionError, urllib.error.URLError, TimeoutError):
+            with socket.create_connection(("127.0.0.1", 9321), timeout=2):
+                break
+        except OSError:
             time.sleep(2)
     else:
         print("BACKEND_STARTUP_FAIL")
