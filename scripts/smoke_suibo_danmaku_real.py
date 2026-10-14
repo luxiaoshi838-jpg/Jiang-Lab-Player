@@ -5,6 +5,7 @@ Does not store video URL, comments, credentials or downloaded media.
 """
 import json
 import re
+import sys
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -62,6 +63,7 @@ def parse_count(raw):
 
 
 def run():
+    missing = []
     for title in WORKS:
         found_video = False
         found_comments = False
@@ -96,7 +98,13 @@ def run():
                       str(exc)[:120], flush=True)
         print(title, "CMS_MATCH=", found_video,
               "ACTUAL_DANMAKU=", found_comments, flush=True)
+        if not found_comments:
+            missing.append(title)
+    if missing:
+        print("FAIL: no actual danmaku for:", ", ".join(missing), flush=True)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    run()
+    sys.exit(run())
