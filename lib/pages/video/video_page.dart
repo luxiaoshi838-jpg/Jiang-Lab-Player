@@ -180,6 +180,17 @@ class _VideoPageState extends State<VideoPage>
         }
       }
     }
+    // A tapped detail-page episode takes precedence over the last watched one.
+    final requested = widget.args;
+    if (requested is OnlineVideoPlaybackArgs && requested.initialEpisode != null) {
+      final road = requested.initialRoad;
+      final episode = requested.initialEpisode!;
+      if (road >= 0 && road < videoPageController.roadList.length &&
+          episode >= 1 && episode <= videoPageController.roadList[road].data.length) {
+        videoPageController.resetEpisodeState(episode: episode, road: road);
+        videoPageController.historyOffset = 0;
+      }
+    }
     _revealCurrentEpisode();
 
     _logSubscription = videoPageController.logStream.listen((log) {
