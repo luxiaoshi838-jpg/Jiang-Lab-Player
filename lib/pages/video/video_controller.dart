@@ -624,7 +624,9 @@ abstract class _VideoPageController with Store implements Disposable {
           params.danmakuEpisodeNumber,
         );
         result = original;
-        if (bangumiItem.type != 2 && !original.hasDanmakus) {
+        // Keep Kazumi's original Bangumi-ID danmaku priority. If it fails,
+        // anime gets the same safe public-source fallback as movies/dramas.
+        if (!params.isLocalPlayback && !original.hasDanmakus) {
           final matched = await MediaDanmakuService.match(
             title: bangumiItem.nameCn.isNotEmpty
                 ? bangumiItem.nameCn

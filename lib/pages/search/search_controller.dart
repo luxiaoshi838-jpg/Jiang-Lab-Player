@@ -15,6 +15,7 @@ import 'package:kazumi/plugins/plugins_controller.dart';
 import 'package:kazumi/utils/search_parser.dart';
 import 'package:kazumi/services/video_source/video_catalog_scope.dart';
 import 'package:kazumi/services/video_source/public_video_catalog.dart';
+import 'package:kazumi/services/video_source/bangumi_real_catalog.dart';
 import 'package:kazumi/services/video_source/tvmaze_catalog_service.dart';
 
 part 'search_controller.g.dart';
@@ -147,14 +148,22 @@ abstract class _SearchPageController with Store {
       final alreadyIndexed = bangumiList.any((item) =>
           MediaWorkIndex.sameWork(item, title));
       if (!alreadyIndexed) {
-        final wiki = await PublicVideoCatalog.findExactVideo(title);
+        // Bangumi's normal search may fail through its configured ECH or
+        // mirror transport even when the public drama subject actually exists.
+        final real = await BangumiRealCatalog.findExact(title);
         if (generation != _searchGeneration) return;
-        if (wiki != null) MediaWorkIndex.addMetadata(bangumiList, wiki);
-        if (wiki == null) {
-          final tvmaze = await TvmazeCatalogService.search(title);
+        if (real != null) {
+          MediaWorkIndex.addMetadata(bangumiList, real);
+        } else {
+          final wiki = await PublicVideoCatalog.findExactVideo(title);
           if (generation != _searchGeneration) return;
-          for (final show in tvmaze) {
-            MediaWorkIndex.addMetadata(bangumiList, show);
+          if (wiki != null) MediaWorkIndex.addMetadata(bangumiList, wiki);
+          if (wiki == null) {
+            final tvmaze = await TvmazeCatalogService.search(title);
+            if (generation != _searchGeneration) return;
+            for (final show in tvmaze) {
+              MediaWorkIndex.addMetadata(bangumiList, show);
+            }
           }
         }
       }
@@ -166,6 +175,8 @@ abstract class _SearchPageController with Store {
   }
 
   Future<void> _appendRuleResults(String keyword, int generation) async {
+    // Kazumi anime and Suibo VOD providers are equal default search sources.
+    // Do not hide anime rules based on a metadata catalog's medium.
     final rules = _pluginsController.pluginList
         .where((rule) => !isLiveOnlyRule(rule.type))
         .toList(growable: false);
@@ -196,6 +207,7 @@ abstract class _SearchPageController with Store {
             pluginName: batch[i].name,
             title: title,
             url: result.src,
+            imageUrl: result.imageUrl,
           ));
         }
       }

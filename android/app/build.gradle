@@ -31,6 +31,12 @@ if (suiboKeyFile.exists()) {
 def suiboSigningFields = ['storeFile', 'storePassword', 'keyAlias', 'keyPassword']
 def suiboSigningConfigured = suiboKeyFile.exists() &&
         suiboSigningFields.every { suiboKeyProperties[it]?.toString()?.trim() }
+// CI may stage an unsigned APK for OFF-GITHUB signing with the ORIGINAL
+// Google Drive JKS. Never generate a substitute certificate or regard this
+// APK as an installable production release.
+def suiboUnsignedCiCandidate = providers.gradleProperty('SUIBO_ALLOW_UNSIGNED_CANDIDATE')
+        .map { it.toString().equalsIgnoreCase('true') }.getOrElse(false) &&
+        System.getenv('GITHUB_ACTIONS') == 'true'
 
 android {
     namespace "com.example.kazumi"
@@ -86,6 +92,10 @@ android {
 tasks.register('verifySuiboReleaseSigning') {
     doLast {
         if (!suiboSigningConfigured) {
+            if (suiboUnsignedCiCandidate && !suiboKeyFile.exists()) {
+                logger.lifecycle('SUIBO: unsigned CI staging only; original Google Drive JKS required before release')
+                return
+            }
             throw new GradleException('Private Android release signing is required; see scripts/private_android_release.py')
         }
         if (!file(suiboKeyProperties['storeFile']).isFile()) {

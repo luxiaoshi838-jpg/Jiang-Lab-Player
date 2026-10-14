@@ -1,0 +1,106 @@
+name: Suibo temporary installer delivery
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    env:
+      DANDANAPI_APPID: ${{ secrets.DANDANAPI_APPID }}
+      DANDANAPI_KEY: ${{ secrets.DANDANAPI_KEY }}
+      SUIBO_DANMU_API_URL: ${{ secrets.SUIBO_DANMU_API_URL }}
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+          cache: true
+      - name: Install Inno Setup 6
+        shell: pwsh
+        run: |
+          $compiler = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $compiler)) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "Inno Setup installation failed" }
+          }
+      - name: Build installable Windows setup
+        shell: pwsh
+        run: |
+          if (([string]::IsNullOrWhiteSpace($env:DANDANAPI_APPID) -or
+               [string]::IsNullOrWhiteSpace($env:DANDANAPI_KEY)) -and
+              [string]::IsNullOrWhiteSpace($env:SUIBO_DANMU_API_URL)) {
+            throw "NO_DANMAKU_PROVIDER: require official credentials or a public danmu_api service"
+          }
+          $out = Join-Path $env:RUNNER_TEMP "suibo-delivery"
+          flutter pub get
+          if ($LASTEXITCODE -ne 0) { throw "Flutter dependency setup failed" }
+          dart run flutter_launcher_icons
+          if ($LASTEXITCODE -ne 0) { throw "Launcher icon generation failed" }
+          & ./scripts/build_windows_installer.ps1 -OutputDirectory $out
+          if ($LASTEXITCODE -ne 0) { throw "Windows installer build failed" }
+          $exe = Join-Path $out "Suibo-Setup-2.3.14-Windows-x64.exe"
+          if (-not (Test-Path $exe)) { throw "Missing installation EXE" }
+          if ((Get-Item $exe).Length -lt 1048576) { throw "Truncated installation EXE" }
+          echo "SUIBO_SETUP=$exe" >> $env:GITHUB_ENV
+          $report = Join-Path $out "Suibo-Windows-install-report-20314.txt"
+          echo "SUIBO_REPORT=$report" >> $env:GITHUB_ENV
+      - uses: actions/upload-artifact@v4
+        with:
+          name: suibo-windows-2.3.14-setup
+          path: |
+            ${{ env.SUIBO_SETUP }}
+            ${{ env.SUIBO_REPORT }}
+          retention-days: 1
+          if-no-files-found: error
+  android-release-temp:
+    runs-on: ubuntu-latest
+    env:
+      DANDANAPI_APPID: ${{ secrets.DANDANAPI_APPID }}
+      DANDANAPI_KEY: ${{ secrets.DANDANAPI_KEY }}
+      SUIBO_DANMU_API_URL: ${{ secrets.SUIBO_DANMU_API_URL }}
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+          cache: true
+      - name: Remove unused preinstalled tools for Android build
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/share/powershell /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/lib/android/sdk/system-images || true
+      - name: Build universal release APK for private re-signing
+        env:
+          ORG_GRADLE_PROJECT_SUIBO_ALLOW_UNSIGNED_CANDIDATE: "true"
+        run: |
+          if [[ ( -z "$DANDANAPI_APPID" || -z "$DANDANAPI_KEY" ) && -z "$SUIBO_DANMU_API_URL" ]]; then
+            echo "::error::NO_DANMAKU_PROVIDER: supply official credentials or an approved public danmu_api service"
+            exit 1
+          fi
+          flutter pub get
+          dart run flutter_launcher_icons
+          flutter build apk --release --dart-define=DANDANAPI_APPID="$DANDANAPI_APPID" --dart-define=DANDANAPI_KEY="$DANDANAPI_KEY" --dart-define=SUIBO_DANMU_API_URL="$SUIBO_DANMU_API_URL"
+          mkdir -p "$RUNNER_TEMP/suibo-apk-stage"
+          apk="build/app/outputs/flutter-apk/app-release.apk"
+          if [ ! -f "$apk" ]; then apk="$(find build/app/outputs/apk -name '*release*unsigned.apk' -type f | head -n 1)"; fi
+          test -f "$apk"
+          cp "$apk" "$RUNNER_TEMP/suibo-apk-stage/REQUIRES-PRIVATE-RESIGN.apk"
+          jarpath=$(find "$ANDROID_HOME/build-tools" -path "*/lib/apksigner.jar" | sort -V | tail -n 1)
+          test -f "$jarpath"
+          cp "$jarpath" "$RUNNER_TEMP/suibo-apk-stage/apksigner.jar"
+          test $(stat -c '%s' "$RUNNER_TEMP/suibo-apk-stage/REQUIRES-PRIVATE-RESIGN.apk") -gt 1048576
+          echo "SUIBO_APK_STAGE=$RUNNER_TEMP/suibo-apk-stage" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: suibo-android-2.3.14-private-resign
+          path: ${{ env.SUIBO_APK_STAGE }}
+          retention-days: 1
+          if-no-files-found: error

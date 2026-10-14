@@ -1,6 +1,10 @@
 import 'dart:math';
+import 'package:flutter_modular/flutter_modular.dart';
+import 'package:kazumi/plugins/plugins_controller.dart';
+import 'package:kazumi/services/video_source/cms_home_catalog.dart';
 import 'package:kazumi/request/apis/bangumi_api.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
+import 'package:kazumi/pages/popular/home_media_category.dart';
 import 'package:kazumi/services/network/bangumi_acceleration.dart';
 import 'package:mobx/mobx.dart';
 
@@ -10,8 +14,33 @@ class PopularController = _PopularController with _$PopularController;
 
 abstract class _PopularController with Store {
   static const int _trendPageSize = 24;
-
   int _trendOffset = 0;
+  bool _homeRequested = false;
+
+  /// Each section loads independently. No artificial entries or cross-genre
+  /// backfill: a catalogue error must not display TV titles as short dramas.
+  final ObservableMap<HomeMediaCategory, ObservableList<BangumiItem>> homeItems =
+      ObservableMap.of({
+    for (final section in HomeMediaCategory.values)
+      section: ObservableList<BangumiItem>(),
+  });
+  final ObservableMap<HomeMediaCategory, bool> homeLoading =
+      ObservableMap.of({
+    for (final section in HomeMediaCategory.values) section: false,
+  });
+  final ObservableMap<HomeMediaCategory, bool> homeFailed =
+      ObservableMap.of({
+    for (final section in HomeMediaCategory.values) section: false,
+  });
+
+  /// One independent selected genre and request token per home category.
+  final ObservableMap<HomeMediaCategory, String> homeSelectedTags =
+      ObservableMap.of({
+    for (final category in HomeMediaCategory.values) category: '',
+  });
+  final Map<HomeMediaCategory, int> _homeGeneration = {
+    for (final category in HomeMediaCategory.values) category: 0,
+  };
 
   @observable
   String currentTag = '';
@@ -33,6 +62,94 @@ abstract class _PopularController with Store {
   bool get _bangumiMirrorEnabled =>
       BangumiAcceleration.current == BangumiAcceleration.mirror;
 
+  @action
+  Future<void> queryHomeRecommendations({bool force = false}) async {
+    if (_homeRequested && !force) return;
+    _homeRequested = true;
+    await Future.wait(
+      HomeMediaCategory.values.map((category) => refreshHomeSection(category)),
+    );
+  }
+
+  Future<void> selectHomeSubcategory(
+      HomeMediaCategory category, String subcategory) async {
+    if (!category.supportsSubcategory(subcategory) ||
+        homeSelectedTags[category] == subcategory) {
+      return;
+    }
+    runInAction(() {
+      homeSelectedTags[category] = subcategory;
+      homeItems[category]!.clear();
+    });
+    await refreshHomeSection(category);
+  }
+
+  Future<void> refreshHomeSection(HomeMediaCategory category) async {
+    // A user can switch genres while the previous request is in flight.
+    // Results from the old selection must never overwrite the latest one.
+    final generation = (_homeGeneration[category] ?? 0) + 1;
+    _homeGeneration[category] = generation;
+    final subcategory = homeSelectedTags[category] ?? '';
+    runInAction(() {
+      homeLoading[category] = true;
+      homeFailed[category] = false;
+    });
+    try {
+      var entries = category == HomeMediaCategory.anime
+          ? await BangumiApi.getHomeRecommendations(
+              category: category,
+              subcategory: subcategory,
+              count: HomeMediaCategory.visibleCount,
+            )
+          : await CmsHomeCatalog.load(
+              category: category,
+              subcategory: subcategory,
+              installedSources: inject<PluginsController>().pluginList,
+              count: HomeMediaCategory.visibleCount,
+            );
+      // Metadata-only Bangumi is secondary: CMS category lists provide
+      // actual playable source identities and posters for live-action works.
+      if (entries.isEmpty && category != HomeMediaCategory.anime) {
+        entries = await BangumiApi.getHomeRecommendations(
+          category: category,
+          subcategory: subcategory,
+          count: HomeMediaCategory.visibleCount,
+        );
+      }
+      // Preserve the original anime popularity feed ONLY for its default
+      // unfiltered category. Other genres cannot borrow unrelated items.
+      if (entries.isEmpty &&
+          category == HomeMediaCategory.anime &&
+          subcategory.isEmpty) {
+        entries = _bangumiMirrorEnabled
+            ? await BangumiApi.getBangumiMirrorPopularSubjects(
+                limit: HomeMediaCategory.visibleCount,
+              )
+            : await BangumiApi.getBangumiTrendsList(
+                type: 2,
+                limit: HomeMediaCategory.visibleCount,
+              );
+      }
+      if (_homeGeneration[category] != generation) return;
+      runInAction(() {
+        final seen = <int>{};
+        homeItems[category]!
+          ..clear()
+          ..addAll(entries.where((entry) => seen.add(entry.id)).take(
+                HomeMediaCategory.visibleCount,
+              ));
+        homeFailed[category] = homeItems[category]!.isEmpty;
+      });
+    } catch (_) {
+      if (_homeGeneration[category] != generation) return;
+      runInAction(() => homeFailed[category] = true);
+    } finally {
+      if (_homeGeneration[category] == generation) {
+        runInAction(() => homeLoading[category] = false);
+      }
+    }
+  }
+
   void setCurrentTag(String s) {
     currentTag = s;
   }
@@ -41,8 +158,6 @@ abstract class _PopularController with Store {
     bangumiList.clear();
   }
 
-  // Async actions commit each segment between awaits as one transaction,
-  // batching the completion writes into a single notification.
   @action
   Future<void> queryBangumiByTrend({String type = 'add'}) async {
     if (type == 'init') {

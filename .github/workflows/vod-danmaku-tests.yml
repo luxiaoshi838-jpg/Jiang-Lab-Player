@@ -23,6 +23,6 @@ jobs:
       - name: Resolve packages
         run: flutter pub get
       - name: Run VOD matching regression
-        run: flutter test test/services/danmaku/media_danmaku_match_test.dart
+        run: flutter test test/services/danmaku/media_danmaku_match_test.dart test/services/danmaku/danmaku_client_compat_test.dart
       - name: Analyze touched Dart files
-        run: flutter analyze lib/services/danmaku/media_danmaku_service.dart lib/pages/video/video_controller.dart lib/pages/player/danmaku_source_sheet.dart test/services/danmaku/media_danmaku_match_test.dart
+        run: flutter analyze lib/services/danmaku/media_danmaku_service.dart lib/request/clients/danmaku_client.dart lib/pages/video/video_controller.dart lib/pages/player/danmaku_source_sheet.dart test/services/danmaku/media_danmaku_match_test.dart test/services/danmaku/danmaku_client_compat_test.dart

@@ -1,0 +1,14 @@
+name: Suibo real CMS home catalogue probe
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  live-category:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe actual catalog sources and genre categories
+        run: python3 scripts/smoke_suibo_home.py

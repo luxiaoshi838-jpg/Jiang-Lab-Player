@@ -1,0 +1,14 @@
+name: Suibo real drama danmaku availability
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  live-danmaku:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Liang Jian and Zhi Fou first-episode URLs on real providers
+        run: python3 scripts/smoke_suibo_danmaku_real.py

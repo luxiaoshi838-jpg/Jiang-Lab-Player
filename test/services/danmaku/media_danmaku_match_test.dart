@@ -94,4 +94,110 @@ void main() {
     expect(BilibiliVideoRef.fromUrl('https://www.bilibili.com/video/BV1234567890?p=2')?.page, 2);
     expect(BilibiliVideoRef.fromUrl('https://live.bilibili.com/1234'), isNull);
   });
+  test('community API URL preserves a configured prefix and encodes query', () {
+    final uri = MediaDanmakuService.communityUri(
+      '/api/v2/search/episodes', {'anime': '生万物', 'episode': '2'});
+    expect(uri, isNotNull);
+    expect(uri!.queryParameters['anime'], '生万物');
+    expect(uri.queryParameters['episode'], '2');
+  });
+
+  test('community response skips invalid comments without losing valid ones', () {
+    final comments = MediaDanmakuService.parseCommunityComments({
+      'comments': [
+        {'m': '你好', 'p': '12.5,1,16777215,腾讯'},
+        {'m': 'bad', 'p': 'invalid'},
+        {'m': '世界', 'p': '13.0,5,16777215,爱奇艺'},
+      ]
+    });
+    expect(comments.length, 2);
+    expect(comments.first.message, '你好');
+    expect(comments.last.time, 13);
+  });
+
+  test('public danmuku API returns timestamped messages', () {
+    final comments = MediaDanmakuService.parsePublicDanmaku(
+      '{"code":23,"danmuku":['
+      '[321.483,"right","","1125690","你好","10-13 19:00","32px"],'
+      '[322.0,"top","","16777215","第二条","","32px"]'
+      ']}',
+    );
+    expect(comments.length, 2);
+    expect(comments.first.time, 321.483);
+    expect(comments.first.message, '你好');
+    expect(comments.last.type, 5);
+  });
+
+  test('public library also supports Bilibili XML', () {
+    final comments = MediaDanmakuService.parsePublicDanmaku(
+        '<i><d p="5.0,1,25,16777215,0,0,0,0">弹幕</d></i>');
+    expect(comments.length, 1);
+    expect(comments.single.message, '弹幕');
+  });
+
+  test('danmu_api automatic match checks exact work and episode', () {
+    final firstEpisode = {
+      'animeTitle': '亮剑',
+      'episodeTitle': '第1集',
+      'episodeId': 8301,
+    };
+    final matched = {'isMatched': true, 'matches': [firstEpisode]};
+    expect(MediaDanmakuService.selectCompatibleMatchId(matched, '亮剑', 1), 8301);
+    expect(MediaDanmakuService.selectCompatibleMatchId({
+      'isMatched': true,
+      'matches': [{
+        'animeTitle': '亮剑(2005)【电视剧】from 360',
+        'episodeTitle': '第1集',
+        'episodeId': 9001,
+      }],
+    }, '亮剑', 1), 9001);
+    expect(MediaDanmakuService.selectCompatibleMatchId({
+      'isMatched': true,
+      'matches': [{
+        'animeTitle': '新亮剑(2011)【电视剧】from 360',
+        'episodeTitle': '第1集',
+        'episodeId': 9002,
+      }],
+    }, '亮剑', 1), isNull);
+    expect(MediaDanmakuService.selectCompatibleMatchId(matched, '亮剑', 2), isNull);
+    expect(MediaDanmakuService.selectCompatibleMatchId(matched, '新亮剑', 1), isNull);
+    expect(MediaDanmakuService.selectCompatibleMatchId({
+      'isMatched': true,
+      'matches': [firstEpisode, firstEpisode],
+    }, '亮剑', 1), isNull);
+    expect(MediaDanmakuService.selectCompatibleMatchId(
+      {'isMatched': false, 'matches': matched['matches']}, '亮剑', 1,
+    ), isNull);
+    expect(MediaDanmakuService.selectCompatibleMatchId({
+      'isMatched': true,
+      'matches': [{'animeTitle': '亮剑', 'episodeTitle': '花絮',
+        'episodeId': 8301}],
+    }, '亮剑', 1), isNull);
+  });
+
+  test('classic mainland dramas use explicit numeric episode labels', () {
+    final episodes = [
+      DanmakuEpisode(episodeId: 7701, episodeTitle: '01'),
+      DanmakuEpisode(episodeId: 7702, episodeTitle: '02'),
+    ];
+    expect(MediaDanmakuService.selectEpisodeId(episodes, 1), 7701);
+    expect(MediaDanmakuService.selectEpisodeId(episodes, 2), 7702);
+    expect(MediaDanmakuService.titlesMatch('亮剑', '《亮剑》'), isTrue);
+    expect(MediaDanmakuService.titlesMatch(
+      '知否知否应是绿肥红瘦', '知否知否应是绿肥红瘦'), isTrue);
+  });
+
+  test('public library URL accepts ordinary sources but not private links', () {
+    expect(MediaDanmakuService.publicDanmakuVideoUrl(
+      'https://cdn.example.com/tv/liangjian/01.m3u8'), isNotNull);
+    expect(MediaDanmakuService.publicDanmakuVideoUrl(
+      'https://v.qq.com/x/cover/abc/video.html'), isNotNull);
+    expect(MediaDanmakuService.publicDanmakuVideoUrl(
+      'https://cdn.example.com/01.m3u8?token=private'), isNull);
+    expect(MediaDanmakuService.publicDanmakuVideoUrl(
+      'https://127.0.0.1/video.mp4'), isNull);
+    expect(MediaDanmakuService.publicDanmakuVideoUrl(
+      'http://example.com/movie.m3u8'), isNull);
+  });
+
 }
