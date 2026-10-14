@@ -99,7 +99,13 @@ class DanmakuClient {
       final response = await DioFactory.apiDio.get(
         target.toString(),
         queryParameters: queryParameters,
-        options: Options(headers: requestHeaders),
+        options: Options(
+          headers: requestHeaders,
+          // Shared community services can need longer for cold starts and
+          // first-episode indexing. Never alter the Kazumi official timeout.
+          connectTimeout: official ? null : const Duration(seconds: 20),
+          receiveTimeout: official ? null : const Duration(seconds: 45),
+        ),
         cancelToken: cancelToken,
       );
       return response.data;
@@ -144,7 +150,11 @@ class DanmakuClient {
       final response = await DioFactory.apiDio.get(
         fallback.toString(),
         queryParameters: {'keyword': keyword},
-        options: Options(headers: {'user-agent': getRandomUA()}),
+        options: Options(
+          headers: {'user-agent': getRandomUA()},
+          connectTimeout: const Duration(seconds: 20),
+          receiveTimeout: const Duration(seconds: 45),
+        ),
       );
       return response.data;
     } on DioException catch (error) {
