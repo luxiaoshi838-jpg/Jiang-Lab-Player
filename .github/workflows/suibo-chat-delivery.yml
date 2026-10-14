@@ -7,6 +7,9 @@ permissions:
 jobs:
   windows-installer:
     runs-on: windows-latest
+    env:
+      DANDANAPI_APPID: ${{ secrets.DANDANAPI_APPID }}
+      DANDANAPI_KEY: ${{ secrets.DANDANAPI_KEY }}
     timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
@@ -26,6 +29,10 @@ jobs:
       - name: Build installable Windows setup
         shell: pwsh
         run: |
+          if ([string]::IsNullOrWhiteSpace($env:DANDANAPI_APPID) -or
+              [string]::IsNullOrWhiteSpace($env:DANDANAPI_KEY)) {
+            throw "MISSING_DANDANPLAY_APP_CREDENTIALS: refuse to package an app without anime danmaku"
+          }
           $out = Join-Path $env:RUNNER_TEMP "suibo-delivery"
           flutter pub get
           if ($LASTEXITCODE -ne 0) { throw "Flutter dependency setup failed" }
@@ -33,15 +40,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Launcher icon generation failed" }
           & ./scripts/build_windows_installer.ps1 -OutputDirectory $out
           if ($LASTEXITCODE -ne 0) { throw "Windows installer build failed" }
-          $exe = Join-Path $out "Suibo-Setup-2.3.13-Windows-x64.exe"
+          $exe = Join-Path $out "Suibo-Setup-2.3.14-Windows-x64.exe"
           if (-not (Test-Path $exe)) { throw "Missing installation EXE" }
           if ((Get-Item $exe).Length -lt 1048576) { throw "Truncated installation EXE" }
           echo "SUIBO_SETUP=$exe" >> $env:GITHUB_ENV
-          $report = Join-Path $out "Suibo-Windows-install-report-20312.txt"
+          $report = Join-Path $out "Suibo-Windows-install-report-20314.txt"
           echo "SUIBO_REPORT=$report" >> $env:GITHUB_ENV
       - uses: actions/upload-artifact@v4
         with:
-          name: suibo-windows-2.3.13-setup
+          name: suibo-windows-2.3.14-setup
           path: |
             ${{ env.SUIBO_SETUP }}
             ${{ env.SUIBO_REPORT }}
@@ -49,6 +56,9 @@ jobs:
           if-no-files-found: error
   android-release-temp:
     runs-on: ubuntu-latest
+    env:
+      DANDANAPI_APPID: ${{ secrets.DANDANAPI_APPID }}
+      DANDANAPI_KEY: ${{ secrets.DANDANAPI_KEY }}
     timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
@@ -75,9 +85,13 @@ jobs:
           EOF
       - name: Build universal release APK for private re-signing
         run: |
+          if [[ -z "$DANDANAPI_APPID" || -z "$DANDANAPI_KEY" ]]; then
+            echo "::error::MISSING_DANDANPLAY_APP_CREDENTIALS: refuse to package a broken anime danmaku client"
+            exit 1
+          fi
           flutter pub get
           dart run flutter_launcher_icons
-          flutter build apk --release
+          flutter build apk --release --dart-define=DANDANAPI_APPID=$DANDANAPI_APPID --dart-define=DANDANAPI_KEY=$DANDANAPI_KEY
           mkdir -p "$RUNNER_TEMP/suibo-apk-stage"
           cp build/app/outputs/flutter-apk/app-release.apk "$RUNNER_TEMP/suibo-apk-stage/REQUIRES-PRIVATE-RESIGN.apk"
           jarpath=$(find "$ANDROID_HOME/build-tools" -path "*/lib/apksigner.jar" | sort -V | tail -n 1)
@@ -87,7 +101,7 @@ jobs:
           echo "SUIBO_APK_STAGE=$RUNNER_TEMP/suibo-apk-stage" >> "$GITHUB_ENV"
       - uses: actions/upload-artifact@v4
         with:
-          name: suibo-android-2.3.13-private-resign
+          name: suibo-android-2.3.14-private-resign
           path: ${{ env.SUIBO_APK_STAGE }}
           retention-days: 1
           if-no-files-found: error
