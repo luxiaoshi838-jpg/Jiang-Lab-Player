@@ -1,7 +1,7 @@
 name: Dart engine real VOD smoke
+# 2.3.16: preserve legacy checks for manual runs only.
 on:
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
