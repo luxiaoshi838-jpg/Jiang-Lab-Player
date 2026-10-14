@@ -7,7 +7,7 @@ import 'package:kazumi/pages/popular/popular_controller.dart';
 import 'package:kazumi/utils/constants.dart';
 import 'package:kazumi/utils/device.dart';
 
-/// Four independent home sections; exactly twelve slots each.
+/// Five independently loaded media categories; no personalized guesses.
 class HomeRecommendations extends StatelessWidget {
   const HomeRecommendations({super.key, required this.controller});
 
@@ -51,7 +51,7 @@ class _HomeSection extends StatelessWidget {
                     final selected =
                         controller.homeSelectedTags[category] ?? '';
                     final heading = selected.isEmpty
-                        ? category.popularTitle
+                        ? category.label
                         : '${category.label} · $selected';
                     return Align(
                       alignment: Alignment.centerLeft,
@@ -68,7 +68,7 @@ class _HomeSection extends StatelessWidget {
                           ])
                             KazumiMenuItem(
                               label: tag.isEmpty
-                                  ? category.popularTitle
+                                  ? category.label
                                   : tag,
                               selected: tag == selected,
                               onPressed: () =>
