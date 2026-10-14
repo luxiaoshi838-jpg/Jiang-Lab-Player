@@ -81,7 +81,19 @@ def search_official(title):
               "SERIES_COUNT=", len(row.get("seriesPlaylinks") or []),
               "SITES=", list((row.get("playlinks") or {}).keys())[:5],
               flush=True)
+        samples = row.get("seriesPlaylinks") or []
+        if samples:
+            example = samples[0]
+            ep = example.get("url", "") if isinstance(example, dict) else example
+            parsed = urllib.parse.urlparse(str(ep))
+            print(title, "FIRST_EPISODE_URL_TYPE=", type(example).__name__,
+                  "FIELDS=", list(example)[:8] if isinstance(example, dict) else [],
+                  "SCHEME=", parsed.scheme, "HOST=", parsed.hostname,
+                  "PATH_SUFFIX=", parsed.path[-20:], flush=True)
         sites = row.get("playlinks") or {}
+        print(title, "PLAYLINK_HOSTS=",
+              {key: urllib.parse.urlparse(str(value)).hostname
+               for key, value in list(sites.items())[:5]}, flush=True)
         if row.get("cat_name") == "电影":
             for url in sites.values():
                 if safe_url(url, require_official=True):
