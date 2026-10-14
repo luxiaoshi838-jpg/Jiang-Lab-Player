@@ -102,16 +102,9 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/share/powershell /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/lib/android/sdk/system-images /opt/az /opt/microsoft || true
           df -h /
-      - name: Configure throwaway signer (NEVER the user's JKS)
-        run: |
-          keytool -genkeypair -noprompt -keystore "$GITHUB_WORKSPACE/android/suibo-temp-only.jks" -storepass temporaryTESTonly2026 -keypass temporaryTESTonly2026 -alias temp-ci-only -keyalg RSA -keysize 2048 -validity 2 -dname "CN=Temporary Re-sign Build,O=Suibo,C=US"
-          cat > android/key.properties <<EOF
-          storeFile=$GITHUB_WORKSPACE/android/suibo-temp-only.jks
-          storePassword=temporaryTESTonly2026
-          keyAlias=temp-ci-only
-          keyPassword=temporaryTESTonly2026
-          EOF
       - name: Build production-mode Android arm64 requiring later private signature
+        env:
+          ORG_GRADLE_PROJECT_SUIBO_ALLOW_UNSIGNED_CANDIDATE: "true"
         run: |
           flutter pub get
           flutter build apk --release --target-platform android-arm64 \
@@ -122,7 +115,10 @@ jobs:
         run: |
           python -m pip install cryptography
           mkdir -p android-stage
-          cp build/app/outputs/flutter-apk/app-release.apk android-stage/REQUIRES-PRIVATE-RESIGN.apk
+          apk="build/app/outputs/flutter-apk/app-release.apk"
+          if [ ! -f "$apk" ]; then apk="$(find build/app/outputs/apk -name '*release*unsigned.apk' -type f | head -n 1)"; fi
+          test -f "$apk"
+          cp "$apk" android-stage/REQUIRES-PRIVATE-RESIGN.apk
           jarpath=$(find "$ANDROID_HOME/build-tools" -path "*/lib/apksigner.jar" | sort -V | tail -n 1)
           test -f "$jarpath"
           cp "$jarpath" android-stage/apksigner.jar

@@ -77,16 +77,9 @@ jobs:
       - name: Remove unused preinstalled tools for Android build
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/share/powershell /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/lib/android/sdk/system-images || true
-      - name: Generate throwaway build signature (not the real signing key)
-        run: |
-          keytool -genkeypair -noprompt -keystore "$GITHUB_WORKSPACE/android/suibo-ci-temp.jks" -storepass temporaryTESTonly2026 -keypass temporaryTESTonly2026 -alias temp-ci-only -keyalg RSA -keysize 2048 -validity 2 -dname "CN=Temporary CI Build,O=Suibo,C=US"
-          cat > android/key.properties <<EOF
-          storeFile=$GITHUB_WORKSPACE/android/suibo-ci-temp.jks
-          storePassword=temporaryTESTonly2026
-          keyAlias=temp-ci-only
-          keyPassword=temporaryTESTonly2026
-          EOF
       - name: Build universal release APK for private re-signing
+        env:
+          ORG_GRADLE_PROJECT_SUIBO_ALLOW_UNSIGNED_CANDIDATE: "true"
         run: |
           if [[ ( -z "$DANDANAPI_APPID" || -z "$DANDANAPI_KEY" ) && -z "$SUIBO_DANMU_API_URL" ]]; then
             echo "::error::NO_DANMAKU_PROVIDER: supply official credentials or an approved public danmu_api service"
@@ -96,7 +89,10 @@ jobs:
           dart run flutter_launcher_icons
           flutter build apk --release --dart-define=DANDANAPI_APPID="$DANDANAPI_APPID" --dart-define=DANDANAPI_KEY="$DANDANAPI_KEY" --dart-define=SUIBO_DANMU_API_URL="$SUIBO_DANMU_API_URL"
           mkdir -p "$RUNNER_TEMP/suibo-apk-stage"
-          cp build/app/outputs/flutter-apk/app-release.apk "$RUNNER_TEMP/suibo-apk-stage/REQUIRES-PRIVATE-RESIGN.apk"
+          apk="build/app/outputs/flutter-apk/app-release.apk"
+          if [ ! -f "$apk" ]; then apk="$(find build/app/outputs/apk -name '*release*unsigned.apk' -type f | head -n 1)"; fi
+          test -f "$apk"
+          cp "$apk" "$RUNNER_TEMP/suibo-apk-stage/REQUIRES-PRIVATE-RESIGN.apk"
           jarpath=$(find "$ANDROID_HOME/build-tools" -path "*/lib/apksigner.jar" | sort -V | tail -n 1)
           test -f "$jarpath"
           cp "$jarpath" "$RUNNER_TEMP/suibo-apk-stage/apksigner.jar"
