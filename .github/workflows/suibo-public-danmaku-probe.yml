@@ -1,10 +1,6 @@
 name: Suibo public danmaku transport probe
+# 2.3.16: preserve this specialist check for manual runs only.
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'scripts/probe_suibo_public_danmaku.py'
-      - '.github/workflows/suibo-public-danmaku-probe.yml'
   workflow_dispatch:
 permissions:
   contents: read

@@ -256,7 +256,9 @@ class _InfoPageState extends State<InfoPage>
     final title = old.nameCn.isEmpty ? old.name : old.nameCn;
     final actual = await BangumiRealCatalog.findExact(title);
     if (!mounted || !identical(infoController.bangumiItem, old) ||
-        actual == null) return;
+        actual == null) {
+      return;
+    }
     for (final source in old.discoveredSources) {
       if (!actual.discoveredSources.any((x) => x.identity == source.identity)) {
         actual.discoveredSources.add(source);

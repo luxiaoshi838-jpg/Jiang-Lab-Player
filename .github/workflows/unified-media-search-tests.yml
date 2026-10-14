@@ -1,8 +1,7 @@
 name: Unified media search regression
+# 2.3.16: preserve this specialist check for manual runs only.
 on:
-  pull_request:
-    branches: [main]
-
+  workflow_dispatch:
 permissions:
   contents: read
 

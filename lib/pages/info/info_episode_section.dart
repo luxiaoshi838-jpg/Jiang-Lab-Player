@@ -4,11 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
 import 'package:kazumi/modules/roads/road_module.dart';
-import 'package:kazumi/modules/search/plugin_search_module.dart';
 import 'package:kazumi/pages/history/history_controller.dart';
 import 'package:kazumi/pages/info/info_controller.dart';
 import 'package:kazumi/pages/video/video_playback_args.dart';
-import 'package:kazumi/plugins/anti_crawler_config.dart';
 import 'package:kazumi/plugins/plugins.dart';
 import 'package:kazumi/plugins/plugins_controller.dart';
 import 'package:kazumi/services/logging/logger.dart';
@@ -178,7 +176,9 @@ class InfoEpisodeSectionState extends State<InfoEpisodeSection> {
     for (final history in previousSources) {
       if (!mounted || generation != _generation) return;
       if (await trySaved(history.adapterName, keywordFrom(item),
-          history.lastSrc)) return;
+          history.lastSrc)) {
+        return;
+      }
     }
 
     if (item.isExternal &&
