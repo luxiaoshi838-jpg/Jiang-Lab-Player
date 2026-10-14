@@ -16,6 +16,8 @@ void main() {
       {'type_id': 4, 'type_name': '动作片', 'type_pid': 1},
       {'type_id': 5, 'type_name': '都市剧', 'type_pid': 2},
       {'type_id': 6, 'type_name': '伦理', 'type_pid': 0},
+      {'type_id': 7, 'type_name': '综艺', 'type_pid': 0},
+      {'type_id': 8, 'type_name': '真人秀', 'type_pid': 7},
     ],
   });
 
@@ -31,6 +33,21 @@ void main() {
     expect(short.map((x) => x['id']), ['3']);
     expect(movie.map((x) => x['id']), isNot(contains('3')));
     expect(tv.map((x) => x['id']), isNot(contains('3')));
+  });
+
+  test('variety returns real variety CMS categories, never movie or TV', () {
+    final variety = CmsHomeCatalog.matchingCategories(
+        HomeMediaCategory.variety, '', taxonomy);
+    expect(variety.map((x) => x['id']), containsAll(['7', '8']));
+    expect(variety.map((x) => x['id']), isNot(contains('2')));
+    expect(CmsHomeCatalog.kindMatches(HomeMediaCategory.series, '真人秀'), isFalse);
+    final rows = CmsHomeCatalog.parseItems({
+      'list': [
+        {'vod_id': '432', 'vod_name': '示例节目', 'type_name': '综艺'},
+        {'vod_id': '433', 'vod_name': '电视剧', 'type_name': '国产剧'},
+      ]
+    }, source, HomeMediaCategory.variety, '', '综艺');
+    expect(rows.map((e) => e.sourceUrl), ['432']);
   });
 
   test('switching a genre prioritizes its matching catalog category', () {
