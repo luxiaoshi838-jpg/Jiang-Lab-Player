@@ -49,7 +49,8 @@ class DanmakuClient {
   static final DanmakuClient instance = DanmakuClient._();
 
   static const String compatibleBase =
-      String.fromEnvironment('SUIBO_DANMU_API_URL');
+      String.fromEnvironment('SUIBO_DANMU_API_URL',
+          defaultValue: 'https://suibo-danmaku.onrender.com');
 
   static bool get hasOfficialCredentials =>
       (dandanCredentials['id'] ?? '').trim().isNotEmpty &&
