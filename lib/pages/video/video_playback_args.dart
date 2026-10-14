@@ -19,12 +19,17 @@ class OnlineVideoPlaybackArgs extends VideoPlaybackArgs {
     required this.title,
     required this.src,
     required this.roads,
+    this.initialEpisode,
+    this.initialRoad = 0,
   });
 
   final Plugin plugin;
   final String title;
   final String src;
   final List<Road> roads;
+  /// An explicit detail-picker selection overrides saved playback history.
+  final int? initialEpisode;
+  final int initialRoad;
 }
 
 class OfflineVideoPlaybackArgs extends VideoPlaybackArgs {
