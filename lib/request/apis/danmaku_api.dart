@@ -46,7 +46,15 @@ class DanmakuApi {
     final url =
         ApiEndpoints.dandanAPIDomain + ApiEndpoints.dandanAPISearchEpisodes;
     Object? lastFailure;
-    DanmakuSearchResponse? empty;
+    final combined = <DanmakuSearchAnime>[];
+    bool completedSearch = false;
+
+    void collect(DanmakuSearchResponse result) {
+      // Truncated matches are insufficient for safe automatic identity.
+      if (result.hasMore) return;
+      completedSearch = true;
+      combined.addAll(result.animes);
+    }
 
     if (DanmakuClient.hasOfficialCredentials) {
       try {
@@ -55,16 +63,15 @@ class DanmakuApi {
           queryParameters: {'anime': title, 'v2': 'true'},
           officialOnly: true,
         );
-        final result = DanmakuSearchResponse.fromJson(data);
-        if (result.animes.isNotEmpty) return result;
-        empty = result;
+        collect(DanmakuSearchResponse.fromJson(data));
       } catch (error) {
         lastFailure = error;
       }
     }
     if (DanmakuClient.hasCompatibleProvider) {
-      // /search/episodes carries stable episode IDs in the same response.
-      // Keep those before falling back to the less detailed /search/anime.
+      // Do not return an official anime result before looking in the
+      // compatible catalog. A drama with the same title can exist in both.
+      bool compatibleFound = false;
       try {
         final data = await _client.get(
           url,
@@ -72,27 +79,27 @@ class DanmakuApi {
           preferCompatible: true,
         );
         final result = DanmakuSearchResponse.fromJson(
-          data,
-          compatibleProvider: true,
+          data, compatibleProvider: true,
         );
-        if (result.animes.isNotEmpty) return result;
-        empty ??= result;
+        collect(result);
+        compatibleFound = result.animes.isNotEmpty && !result.hasMore;
       } catch (error) {
         lastFailure = error;
       }
-      try {
-        final data = await _client.searchCompatibleTitles(title);
-        final result = DanmakuSearchResponse.fromJson(
-          data,
-          compatibleProvider: true,
-        );
-        if (result.animes.isNotEmpty) return result;
-        empty ??= result;
-      } catch (error) {
-        lastFailure ??= error;
+      if (!compatibleFound) {
+        try {
+          final data = await _client.searchCompatibleTitles(title);
+          collect(DanmakuSearchResponse.fromJson(
+            data, compatibleProvider: true,
+          ));
+        } catch (error) {
+          lastFailure ??= error;
+        }
       }
     }
-    if (empty != null) return empty;
+    if (completedSearch) {
+      return DanmakuSearchResponse(animes: combined, hasMore: false);
+    }
     throw lastFailure ?? StateError('弹幕搜索服务未返回有效结果');
   }
 
