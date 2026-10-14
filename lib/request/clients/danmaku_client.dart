@@ -5,10 +5,18 @@ import 'package:kazumi/utils/dandan_credentials.dart';
 import 'package:kazumi/utils/http_headers.dart';
 import 'package:kazumi/utils/crypto.dart';
 
+/// A missing provider is not an empty danmaku search result.
+class DanmakuProviderUnavailable implements Exception {
+  const DanmakuProviderUnavailable();
+
+  @override
+  String toString() => '弹幕服务未连接：正式构建缺少有效的弹幕搜索服务。';
+}
+
 class DanmakuClient {
-  /// danmu_api implements these DanDanPlay-compatible endpoints. Preserve
-  /// its optional /TOKEN path prefix and never send signature credentials to
-  /// another host. The XML-only danmu.icu endpoint is NOT compatible.
+  /// Keep the original Kazumi official protocol. A separately configured
+  /// compatible API is used only on the same /api/v2/ paths, without any
+  /// DanDanPlay credentials or signing headers.
   static Uri? compatibleUri(Uri requested, String configuredBase) {
     if (requested.scheme != 'https' ||
         requested.host != 'api.dandanplay.net' ||
@@ -40,46 +48,98 @@ class DanmakuClient {
 
   static final DanmakuClient instance = DanmakuClient._();
 
+  static const String compatibleBase =
+      String.fromEnvironment('SUIBO_DANMU_API_URL');
+
+  static bool get hasOfficialCredentials =>
+      (dandanCredentials['id'] ?? '').trim().isNotEmpty &&
+      (dandanCredentials['value'] ?? '').trim().isNotEmpty;
+
+  static bool get hasCompatibleProvider =>
+      compatibleUri(
+        Uri.parse('https://api.dandanplay.net/api/v2/search/episodes'),
+        compatibleBase,
+      ) != null;
+
+  /// Manual search and automatic matching share one clearly diagnosed
+  /// connection. Do not send unsigned requests to official DanDanPlay.
   Future<dynamic> get(
     String url, {
     Map<String, dynamic>? queryParameters,
     Map<String, dynamic> headers = const {},
     CancelToken? cancelToken,
   }) async {
-    final timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final uri = Uri.parse(url);
-    // Original Kazumi authentication takes priority whenever configured.
-    // When its credentials are unavailable, use the developer-provisioned
-    // danmu_api-compatible service without sending an invalid X-Signature.
-    const compatibleBase = String.fromEnvironment('SUIBO_DANMU_API_URL');
-    final hasOfficialCredentials =
-        (dandanCredentials['id'] ?? '').isNotEmpty &&
-        (dandanCredentials['value'] ?? '').isNotEmpty;
-    final fallback = hasOfficialCredentials
-        ? null
-        : compatibleUri(uri, compatibleBase);
-    final requestHeaders = fallback == null
-        ? <String, dynamic>{
-            'user-agent': getRandomUA(),
-            'referer': '',
-            'X-Auth': 1,
-            'X-AppId': dandanCredentials['id'],
-            'X-Timestamp': timestamp,
-            'X-Signature': generateDandanSignature(uri.path, timestamp),
-            ...headers,
-          }
-        : <String, dynamic>{'user-agent': getRandomUA()};
+    final fallback = compatibleUri(uri, compatibleBase);
+    if (!hasOfficialCredentials && fallback == null) {
+      throw const DanmakuProviderUnavailable();
+    }
 
-    try {
-      final response = await DioFactory.apiDio.get(
-        fallback?.toString() ?? url,
+    Future<dynamic> request(Uri target, {required bool official}) async {
+      final timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final requestHeaders = official
+          ? <String, dynamic>{
+              'user-agent': getRandomUA(),
+              'referer': '',
+              'X-Auth': 1,
+              'X-AppId': dandanCredentials['id'],
+              'X-Timestamp': timestamp,
+              'X-Signature': generateDandanSignature(uri.path, timestamp),
+              ...headers,
+            }
+          : <String, dynamic>{'user-agent': getRandomUA()};
+      final response = await DioFactory.apiDio.getUri(
+        target,
         queryParameters: queryParameters,
         options: Options(headers: requestHeaders),
         cancelToken: cancelToken,
       );
       return response.data;
-    } on DioException catch (e) {
-      throw await NetworkErrorMapper.mapException(e);
+    }
+
+    try {
+      if (!hasOfficialCredentials) {
+        return await request(fallback!, official: false);
+      }
+      try {
+        return await request(uri, official: true);
+      } on DioException catch (error) {
+        // A genuine alternative service may keep search working even when
+        // the original service is unreachable or rejects a revoked key.
+        // Never forward X-AppId/X-Signature to that service.
+        if (fallback == null ||
+            (error.response != null &&
+                error.response!.statusCode != 401 &&
+                error.response!.statusCode != 403 &&
+                error.response!.statusCode != 429 &&
+                error.response!.statusCode! < 500)) {
+          rethrow;
+        }
+        return await request(fallback, official: false);
+      }
+    } on DioException catch (error) {
+      throw await NetworkErrorMapper.mapException(error);
+    }
+  }
+
+  /// Companion lookup for danmu_api implementations that expose work-title
+  /// search as /api/v2/search/anime?keyword=. Not an official API endpoint.
+  Future<dynamic> searchCompatibleTitles(String keyword) async {
+    final requested = Uri.parse(
+        'https://api.dandanplay.net/api/v2/search/anime');
+    final fallback = compatibleUri(requested, compatibleBase);
+    if (fallback == null) {
+      throw const DanmakuProviderUnavailable();
+    }
+    try {
+      final response = await DioFactory.apiDio.getUri(
+        fallback,
+        queryParameters: {'keyword': keyword},
+        options: Options(headers: {'user-agent': getRandomUA()}),
+      );
+      return response.data;
+    } on DioException catch (error) {
+      throw await NetworkErrorMapper.mapException(error);
     }
   }
 }
