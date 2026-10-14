@@ -10,7 +10,7 @@ jobs:
     env:
       DANDANAPI_APPID: ${{ secrets.DANDANAPI_APPID }}
       DANDANAPI_KEY: ${{ secrets.DANDANAPI_KEY }}
-      SUIBO_DANMU_API_URL: ${{ secrets.SUIBO_DANMU_API_URL }}
+      SUIBO_DANMU_API_URL: ${{ secrets.SUIBO_DANMU_API_URL || 'https://suibo-danmaku.onrender.com' }}
     steps:
       - name: Refuse unusable anime-danmaku release
         run: |
@@ -40,7 +40,7 @@ jobs:
     env:
       DANDANAPI_APPID: ${{ secrets.DANDANAPI_APPID }}
       DANDANAPI_KEY: ${{ secrets.DANDANAPI_KEY }}
-      SUIBO_DANMU_API_URL: ${{ secrets.SUIBO_DANMU_API_URL }}
+      SUIBO_DANMU_API_URL: ${{ secrets.SUIBO_DANMU_API_URL || 'https://suibo-danmaku.onrender.com' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -84,7 +84,7 @@ jobs:
     env:
       DANDANAPI_APPID: ${{ secrets.DANDANAPI_APPID }}
       DANDANAPI_KEY: ${{ secrets.DANDANAPI_KEY }}
-      SUIBO_DANMU_API_URL: ${{ secrets.SUIBO_DANMU_API_URL }}
+      SUIBO_DANMU_API_URL: ${{ secrets.SUIBO_DANMU_API_URL || 'https://suibo-danmaku.onrender.com' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
