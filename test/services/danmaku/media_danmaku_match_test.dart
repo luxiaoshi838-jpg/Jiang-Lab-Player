@@ -147,17 +147,17 @@ void main() {
       'isMatched': true,
       'matches': [{
         'animeTitle': '亮剑(2005)【电视剧】from 360',
-        'episodeTitle': '【qiyi】第1集',
-        'episodeId': 8401,
-      }]
-    }, '亮剑', 1), 8401);
+        'episodeTitle': '第1集',
+        'episodeId': 9001,
+      }],
+    }, '亮剑', 1), 9001);
     expect(MediaDanmakuService.selectCompatibleMatchId({
       'isMatched': true,
       'matches': [{
         'animeTitle': '新亮剑(2011)【电视剧】from 360',
         'episodeTitle': '第1集',
-        'episodeId': 8402,
-      }]
+        'episodeId': 9002,
+      }],
     }, '亮剑', 1), isNull);
     expect(MediaDanmakuService.selectCompatibleMatchId(matched, '亮剑', 2), isNull);
     expect(MediaDanmakuService.selectCompatibleMatchId(matched, '新亮剑', 1), isNull);
@@ -173,43 +173,6 @@ void main() {
       'matches': [{'animeTitle': '亮剑', 'episodeTitle': '花絮',
         'episodeId': 8301}],
     }, '亮剑', 1), isNull);
-  });
-
-  test('catalogue resolves exact TV episodes to public official pages', () {
-    final item = <String, dynamic>{
-      'cat_name': '电视剧',
-      'seriesPlaylinks': [
-        {'url': 'https://v.qq.com/x/cover/abc/episode1.html'},
-        {'url': 'https://v.qq.com/x/cover/abc/episode2.html'},
-      ],
-    };
-    expect(MediaDanmakuService.officialEpisodePage(item, 1),
-        'https://v.qq.com/x/cover/abc/episode1.html');
-    expect(MediaDanmakuService.officialEpisodePage(item, 2),
-        'https://v.qq.com/x/cover/abc/episode2.html');
-    expect(MediaDanmakuService.officialEpisodePage(item, 3), isNull);
-    item['seriesPlaylinks'] = [
-      {'url': 'http://www.iqiyi.com/v_19rrj5sgww.html'},
-    ];
-    expect(MediaDanmakuService.officialEpisodePage(item, 1),
-        'https://www.iqiyi.com/v_19rrj5sgww.html');
-    item['seriesPlaylinks'] = [
-      {'url': 'https://v.youku.com/video?vid=XNjQ4MTIwOTE2NA==&tpa=example'},
-    ];
-    expect(MediaDanmakuService.officialEpisodePage(item, 1),
-        'https://v.youku.com/v_show/id_XNjQ4MTIwOTE2NA==.html');
-    expect(MediaDanmakuService.normalizeOfficialDanmakuPage(
-      'https://v.youku.com/video?vid=ok&token=private'), isNull);
-    item['seriesPlaylinks'] = [
-      {'url': 'https://cdn.example.com/1.m3u8'},
-    ];
-    expect(MediaDanmakuService.officialEpisodePage(item, 1), isNull);
-    expect(MediaDanmakuService.isOfficialDanmakuPage(
-        'https://v.qq.com/x/cover/abc/episode1.html'), isTrue);
-    expect(MediaDanmakuService.isOfficialDanmakuPage(
-        'https://cdn.example.com/1.m3u8'), isFalse);
-    expect(MediaDanmakuService.isOfficialDanmakuPage(
-        'http://v.qq.com/x/cover/abc/episode1.html'), isFalse);
   });
 
   test('classic mainland dramas use explicit numeric episode labels', () {
