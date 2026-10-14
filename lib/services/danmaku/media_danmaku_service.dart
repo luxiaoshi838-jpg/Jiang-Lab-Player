@@ -9,6 +9,7 @@ import 'package:kazumi/request/apis/danmaku_api.dart';
 import 'package:kazumi/request/core/dio_factory.dart';
 import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/utils/danmaku.dart';
+import 'package:kazumi/utils/dandan_credentials.dart';
 
 /// Recorded Bilibili BV/av videos, never Bilibili live rooms.
 class BilibiliVideoRef {
@@ -80,7 +81,12 @@ class MediaDanmakuService {
     // titles (rather than guessing a different show or downloading catalogs).
     // Always load the explicit episodeId from the server's episode list.
     final searched = <String>{};
-    for (final query in <String>[title, ...titleAliases]) {
+    final officialConfigured =
+        (dandanCredentials['id'] ?? '').isNotEmpty &&
+        (dandanCredentials['value'] ?? '').isNotEmpty;
+    for (final query in officialConfigured
+        ? <String>[title, ...titleAliases]
+        : const <String>[]) {
       final normalized = normalizeTitle(query);
       if (normalized.isEmpty || !searched.add(normalized)) continue;
       if (searched.length > 3) {
