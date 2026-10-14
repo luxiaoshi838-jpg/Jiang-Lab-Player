@@ -53,8 +53,8 @@ def get_json(base, path, query, official=False):
 
 def normalize(value):
     name = str(value).split("【", 1)[0]
-    name = re.sub(r"[(（](?:19|20)\\d{2}[)）]", "", name)
-    return "".join(re.findall(r"[\\w\\u4e00-\\u9fff]+", name)).lower()
+    name = re.sub(r"[(（](?:19|20)\d{2}[)）]", "", name)
+    return "".join(re.findall(r"[\w\u4e00-\u9fff]+", name)).lower()
 
 
 def search(base, name, official):
@@ -85,7 +85,7 @@ def first_episode(base, anime_id, official):
     if not isinstance(rows, list):
         return None
     first = [r for r in rows if isinstance(r, dict) and
-             re.search(r"^(?:第\\s*0*1\\s*[集话期]|0*1$|(?:ep|e)0*1$)",
+             re.search(r"^(?:第\s*0*1\s*[集话期]|0*1$|(?:ep|e)0*1$)",
                        str(r.get("episodeTitle", "")).strip(), re.I)]
     if len(first) == 1:
         return first[0].get("episodeId")
