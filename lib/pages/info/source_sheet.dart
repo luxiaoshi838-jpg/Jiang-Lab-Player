@@ -52,10 +52,6 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
   final Map<String, String> _sourceKeywords = {};
   bool _includeAnimeRules = false;
 
-  bool get _isDrama => isConfirmedDramaCatalogue(
-      widget.infoController.bangumiItem.type,
-      widget.infoController.bangumiItem.sourcePlugin);
-
   List<Plugin> get _eligiblePlugins =>
       _pluginsController.pluginList
           .where((p) => !isLiveOnlyRule(p.type))
