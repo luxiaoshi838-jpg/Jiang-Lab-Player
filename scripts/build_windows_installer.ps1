@@ -33,7 +33,13 @@ if (-not $SkipFlutterBuild) {
     if ($LASTEXITCODE -ne 0) { throw "flutter config failed" }
     & flutter pub get
     if ($LASTEXITCODE -ne 0) { throw "flutter pub get failed" }
-    & flutter build windows --release
+    $buildArgs = @("build", "windows", "--release")
+    if (-not [string]::IsNullOrWhiteSpace($env:DANDANAPI_APPID) -and
+        -not [string]::IsNullOrWhiteSpace($env:DANDANAPI_KEY)) {
+        $buildArgs += @("--dart-define=DANDANAPI_APPID=$env:DANDANAPI_APPID",
+                        "--dart-define=DANDANAPI_KEY=$env:DANDANAPI_KEY")
+    }
+    & flutter @buildArgs
     if ($LASTEXITCODE -ne 0) { throw "Flutter Windows release build failed" }
 }
 
