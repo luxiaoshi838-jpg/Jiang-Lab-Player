@@ -1,0 +1,39 @@
+name: Suibo ephemeral upstream danmu_api smoke
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/probe_suibo_selfhosted_backend.py'
+      - '.github/workflows/suibo-upstream-danmu-api-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-source-episode-comments:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: huangxd-/danmu_api
+          ref: f47b786876f2ab51ef69518e5e0b1c0574664589
+          path: third_party_runtime
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned upstream in temporary runner only
+        working-directory: third_party_runtime
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Start ephemeral upstream service without application secrets
+        working-directory: third_party_runtime
+        run: |
+          DANMU_API_PORT=9321 node danmu_api/server.js >/tmp/suibo-upstream-smoke.log 2>&1 &
+          echo $! > /tmp/suibo-upstream-smoke.pid
+      - name: Verify real anime and drama title to episode to nonempty comments
+        run: python3 -u scripts/probe_suibo_selfhosted_backend.py
+        env:
+          SUIBO_LOCAL_DANMU_URL: http://127.0.0.1:9321
+      - name: Print safe service startup errors on failure
+        if: failure()
+        run: tail -n 35 /tmp/suibo-upstream-smoke.log | sed -E 's#https?://[^ ]+#<url>#g'
