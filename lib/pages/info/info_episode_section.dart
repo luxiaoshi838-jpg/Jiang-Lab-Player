@@ -235,7 +235,7 @@ class InfoEpisodeSectionState extends State<InfoEpisodeSection> {
     final count = road?.data.length ?? 0;
     final pages = (count + pageSize - 1) ~/ pageSize;
     final first = _page * pageSize;
-    final last = (first + pageSize).clamp(0, count);
+    final last = (first + pageSize).clamp(0, count).toInt();
     return Padding(
       key: const ValueKey('suibo-episode-section'),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -297,7 +297,7 @@ class InfoEpisodeSectionState extends State<InfoEpisodeSection> {
                             setState(() {
                               _roadIndex = index;
                               _episode = resume.clamp(
-                                  1, _roads[index].data.length);
+                                  1, _roads[index].data.length).toInt();
                               _page = (_episode - 1) ~/ pageSize;
                             });
                           },
