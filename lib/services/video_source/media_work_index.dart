@@ -42,8 +42,12 @@ class MediaWorkIndex {
   }
 
   static bool mediumCompatible(BangumiItem work, int mediaType) {
-    if (mediaType == 0) return true;
-    if (work.type != 0 && work.type != mediaType) return false;
+    if (mediaType == 0) {
+      return true;
+    }
+    if (work.type != 0 && work.type != mediaType) {
+      return false;
+    }
     // Drama-only lookup metadata is not an anime cover.
     if (mediaType == 2 && (work.sourcePlugin == '百科影视目录' ||
         work.sourcePlugin == 'TVmaze节目目录')) return false;
