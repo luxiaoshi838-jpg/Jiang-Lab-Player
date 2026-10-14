@@ -56,6 +56,13 @@ class MediaDanmakuMatch {
 /// Reuse Kazumi's existing canvas, timing, filtering and manual source picker.
 /// Only on-demand VOD is supported; no live room/chat protocol is added.
 class MediaDanmakuService {
+  /// An independently configured compatible title-search service must be
+  /// usable without any official DanDanPlay application credentials.
+  static bool canAutoSearchTitles({
+    required bool officialConfigured,
+    required bool compatibleConfigured,
+  }) => officialConfigured || compatibleConfigured;
+
   static Future<MediaDanmakuMatch?> match({
     required String title,
     required int episode,
@@ -84,8 +91,10 @@ class MediaDanmakuService {
     // Title matching must work with EITHER supported provider.
     // Previously this whole block was disabled without official credentials,
     // even if a compatible danmu_api title-search server was configured.
-    final titleProviderAvailable = DanmakuClient.hasOfficialCredentials ||
-        DanmakuClient.hasCompatibleProvider;
+    final titleProviderAvailable = canAutoSearchTitles(
+      officialConfigured: DanmakuClient.hasOfficialCredentials,
+      compatibleConfigured: DanmakuClient.hasCompatibleProvider,
+    );
     for (final query in titleProviderAvailable
         ? <String>[title, ...titleAliases]
         : const <String>[]) {
