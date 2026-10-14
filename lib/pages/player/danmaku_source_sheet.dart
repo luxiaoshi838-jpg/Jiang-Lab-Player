@@ -211,6 +211,7 @@ class _DanmakuSourceSheetState extends State<_DanmakuSourceSheet> {
           await DanmakuApi.getDanDanEpisodesByDanDanBangumiID(
         anime.animeId,
         preferCompatible: anime.compatibleProvider,
+        strictProvider: true,
       );
       if (!mounted) return;
       setState(() {
