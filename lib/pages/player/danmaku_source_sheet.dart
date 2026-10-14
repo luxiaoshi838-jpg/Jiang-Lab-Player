@@ -119,6 +119,7 @@ class _DanmakuSourceSheetState extends State<_DanmakuSourceSheet> {
   List<DanmakuSearchAnime> _animes = const [];
   List<DanmakuEpisode> _episodes = const [];
   String? _animeTitle;
+  bool _selectedCompatibleProvider = false;
   int? _segmentStart;
   String? _error;
   bool _loading = false;
@@ -198,6 +199,7 @@ class _DanmakuSourceSheetState extends State<_DanmakuSourceSheet> {
       _loading = true;
       _error = null;
       _animeTitle = anime.animeTitle;
+      _selectedCompatibleProvider = anime.compatibleProvider;
       _step = _SourceStep.episode;
       _episodes = const [];
       _episodeSearchController.clear();
@@ -206,7 +208,10 @@ class _DanmakuSourceSheetState extends State<_DanmakuSourceSheet> {
     });
     try {
       final response =
-          await DanmakuApi.getDanDanEpisodesByDanDanBangumiID(anime.animeId);
+          await DanmakuApi.getDanDanEpisodesByDanDanBangumiID(
+        anime.animeId,
+        preferCompatible: anime.compatibleProvider,
+      );
       if (!mounted) return;
       setState(() {
         _loading = false;
@@ -228,15 +233,21 @@ class _DanmakuSourceSheetState extends State<_DanmakuSourceSheet> {
     try {
       widget.onBeforeApply();
       final hasDanmakus = await widget.danmakuController
-          .getDanDanmakuByEpisodeID(episode.episodeId);
+          .getDanDanmakuByEpisodeID(
+        episode.episodeId,
+        preferCompatible: _selectedCompatibleProvider,
+      );
       if (!mounted) return;
       widget.danmakuController.setDanmakuEnabled(hasDanmakus);
       var saved = false;
       if (hasDanmakus && widget.rememberSelection &&
           !GStorage.getSetting(SettingsKeys.privateMode)) {
         try {
-          await ManualDanmakuLinkStore.save(
-            widget.bangumiId, widget.episodeNumber, episode.episodeId,
+          await ManualDanmakuLinkStore.saveWithSource(
+            widget.bangumiId,
+            widget.episodeNumber,
+            episode.episodeId,
+            compatibleProvider: _selectedCompatibleProvider,
           );
           saved = true;
         } catch (error) {
