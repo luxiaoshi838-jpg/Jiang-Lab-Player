@@ -68,10 +68,17 @@ class DanmakuClient {
     Map<String, dynamic>? queryParameters,
     Map<String, dynamic> headers = const {},
     CancelToken? cancelToken,
+    bool preferCompatible = false,
+    bool officialOnly = false,
   }) async {
+    if (preferCompatible && officialOnly) {
+      throw ArgumentError('Cannot require both danmaku providers');
+    }
     final uri = Uri.parse(url);
     final fallback = compatibleUri(uri, compatibleBase);
-    if (!hasOfficialCredentials && fallback == null) {
+    if ((preferCompatible && fallback == null) ||
+        (officialOnly && !hasOfficialCredentials) ||
+        (!hasOfficialCredentials && fallback == null)) {
       throw const DanmakuProviderUnavailable();
     }
 
@@ -98,7 +105,7 @@ class DanmakuClient {
     }
 
     try {
-      if (!hasOfficialCredentials) {
+      if (preferCompatible || !hasOfficialCredentials) {
         return await request(fallback!, official: false);
       }
       try {
@@ -107,7 +114,8 @@ class DanmakuClient {
         // A genuine alternative service may keep search working even when
         // the original service is unreachable or rejects a revoked key.
         // Never forward X-AppId/X-Signature to that service.
-        if (fallback == null ||
+        if (officialOnly ||
+            fallback == null ||
             (error.response != null &&
                 error.response!.statusCode != 401 &&
                 error.response!.statusCode != 403 &&
