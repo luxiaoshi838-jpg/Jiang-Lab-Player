@@ -60,6 +60,26 @@ void main() {
     );
   });
 
+  test('native anime fallback excludes matching live-action TV adaptation', () {
+    const response = DanmakuSearchResponse(animes: [
+      DanmakuSearchAnime(
+        animeId: 100, animeTitle: '凡人修仙传(2020)【动漫】from qq',
+        typeDescription: '国产动漫', compatibleProvider: true,
+      ),
+      DanmakuSearchAnime(
+        animeId: 200, animeTitle: '凡人修仙传(2025)【电视剧】from youku',
+        typeDescription: '电视剧', compatibleProvider: true,
+      ),
+    ], hasMore: false);
+    final chosen = MediaDanmakuService.matchingSourceCandidates(
+      response, '凡人修仙传', preferAnimation: true,
+    );
+    expect(chosen.map((entry) => entry.animeId).toList(), [100]);
+    expect(MediaDanmakuService.matchingSourceCandidates(
+      response, '凡人修仙传',
+    ), isEmpty);
+  });
+
   test('conflicting release years do not trigger an automatic wrong edition', () {
     const response = DanmakuSearchResponse(
       animes: [
