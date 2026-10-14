@@ -62,9 +62,15 @@ def main():
                     continue
                 detail = fetch("/api/v2/bangumi/" + urllib.parse.quote(str(anime_id), safe=""))
                 episodes = detail.get("bangumi", {}).get("episodes", [])
+                first_labels = [str(x.get("episodeTitle", ""))[:32] for x in episodes[:3]
+                                if isinstance(x, dict)]
+                print(f"DETAIL {title}: episodes={len(episodes)}, labels={first_labels}", flush=True)
                 eps = [x for x in episodes if isinstance(x, dict) and
                        re.search(r"^(?:第\s*0*1\s*[集话期]|0*1$|(?:ep|e)0*1$)",
                                  str(x.get("episodeTitle", "")).strip(), re.I)]
+                if not eps:
+                    eps = [x for x in episodes if isinstance(x, dict) and
+                           str(x.get("episodeNumber", "")).lstrip("0") == "1"]
                 if not eps and len(episodes) == 1:
                     eps = episodes
                 for ep in eps[:2]:
