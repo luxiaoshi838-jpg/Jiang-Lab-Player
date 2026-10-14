@@ -19,11 +19,17 @@ class CmsHomeCatalog {
   static bool kindMatches(HomeMediaCategory kind, String label) {
     if (label.isEmpty || isAdultLabel(label)) return false;
     if (kind == HomeMediaCategory.anime) return false;
+    if (kind == HomeMediaCategory.variety) {
+      return label.contains('综艺') || label.contains('真人秀') ||
+          label.contains('娱乐节目');
+    }
     if (kind == HomeMediaCategory.shortDrama) {
       return label.contains('短剧') || label.contains('微剧');
     }
     if (label.contains('短剧') || label.contains('微短') ||
-        label.contains('动漫') || label.contains('动画')) {
+        label.contains('动漫') || label.contains('动画') ||
+        label.contains('综艺') || label.contains('真人秀') ||
+        label.contains('娱乐节目')) {
       return false;
     }
     if (kind == HomeMediaCategory.movie) {
