@@ -77,7 +77,7 @@ const server = http.createServer((request, response) => {
     headers: {
       'accept': 'application/json',
       'accept-encoding': 'identity',
-      'content-type': isPost ? 'application/json' : undefined,
+      ...(isPost ? {'content-type': 'application/json'} : {}),
     },
     timeout: 90000,
   }, (upstreamResponse) => {
