@@ -160,7 +160,10 @@ def main():
                                           "media_host=", urllib.parse.urlsplit(link).hostname, flush=True)
                                     break
                             except Exception as exc:
-                                print("MEDIA_UNAVAILABLE", type(exc).__name__, flush=True)
+                                reason = str(exc) if isinstance(exc, ValueError) else type(exc).__name__
+                                if len(reason) > 80:
+                                    reason = reason[:80]
+                                print("MEDIA_UNAVAILABLE", reason, flush=True)
                     except Exception as exc:
                         print("DETAIL_UNAVAILABLE", type(exc).__name__, flush=True)
         except Exception as exc:
