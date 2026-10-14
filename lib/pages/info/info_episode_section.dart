@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
 import 'package:kazumi/modules/roads/road_module.dart';
+import 'package:kazumi/modules/search/plugin_search_module.dart';
 import 'package:kazumi/pages/history/history_controller.dart';
 import 'package:kazumi/pages/info/info_controller.dart';
 import 'package:kazumi/pages/video/video_playback_args.dart';
