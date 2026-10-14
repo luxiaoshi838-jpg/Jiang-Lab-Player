@@ -11,7 +11,7 @@ jobs:
     env:
       DANDANAPI_APPID: ${{ secrets.DANDANAPI_APPID }}
       DANDANAPI_KEY: ${{ secrets.DANDANAPI_KEY }}
-      SUIBO_DANMU_API_URL: ${{ secrets.SUIBO_DANMU_API_URL }}
+      SUIBO_DANMU_API_URL: ${{ secrets.SUIBO_DANMU_API_URL || 'https://suibo-danmaku.onrender.com' }}
     steps:
       - uses: actions/checkout@v4
       - name: Verify actual anime and drama search, episode and nonempty comments
@@ -21,7 +21,7 @@ jobs:
     env:
       DANDANAPI_APPID: ${{ secrets.DANDANAPI_APPID }}
       DANDANAPI_KEY: ${{ secrets.DANDANAPI_KEY }}
-      SUIBO_DANMU_API_URL: ${{ secrets.SUIBO_DANMU_API_URL }}
+      SUIBO_DANMU_API_URL: ${{ secrets.SUIBO_DANMU_API_URL || 'https://suibo-danmaku.onrender.com' }}
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
@@ -73,7 +73,7 @@ jobs:
     env:
       DANDANAPI_APPID: ${{ secrets.DANDANAPI_APPID }}
       DANDANAPI_KEY: ${{ secrets.DANDANAPI_KEY }}
-      SUIBO_DANMU_API_URL: ${{ secrets.SUIBO_DANMU_API_URL }}
+      SUIBO_DANMU_API_URL: ${{ secrets.SUIBO_DANMU_API_URL || 'https://suibo-danmaku.onrender.com' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
