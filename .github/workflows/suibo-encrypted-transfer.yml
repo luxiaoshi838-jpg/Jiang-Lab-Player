@@ -7,7 +7,16 @@ permissions:
 jobs:
   transport-preflight:
     runs-on: ubuntu-latest
+    env:
+      DANDANAPI_APPID: ${{ secrets.DANDANAPI_APPID }}
+      DANDANAPI_KEY: ${{ secrets.DANDANAPI_KEY }}
     steps:
+      - name: Refuse unusable anime-danmaku release
+        run: |
+          if [[ -z "$DANDANAPI_APPID" || -z "$DANDANAPI_KEY" ]]; then
+            echo "::error::DANDANPLAY_CREDENTIALS_MISSING: no public installer is valid without its original Kazumi danmaku API"
+            exit 1
+          fi
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -27,6 +36,9 @@ jobs:
   windows-setup:
     needs: transport-preflight
     runs-on: windows-latest
+    env:
+      DANDANAPI_APPID: ${{ secrets.DANDANAPI_APPID }}
+      DANDANAPI_KEY: ${{ secrets.DANDANAPI_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -67,6 +79,9 @@ jobs:
   android-arm64-release:
     needs: transport-preflight
     runs-on: ubuntu-latest
+    env:
+      DANDANAPI_APPID: ${{ secrets.DANDANAPI_APPID }}
+      DANDANAPI_KEY: ${{ secrets.DANDANAPI_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -96,7 +111,9 @@ jobs:
       - name: Build production-mode Android arm64 requiring later private signature
         run: |
           flutter pub get
-          flutter build apk --release --target-platform android-arm64
+          flutter build apk --release --target-platform android-arm64 \
+            --dart-define=DANDANAPI_APPID="$DANDANAPI_APPID" \
+            --dart-define=DANDANAPI_KEY="$DANDANAPI_KEY"
       - name: Encrypt ZIP with APK and local re-signing utility
         run: |
           python -m pip install cryptography
