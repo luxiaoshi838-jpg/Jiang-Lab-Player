@@ -88,8 +88,8 @@ class DanmakuClient {
               ...headers,
             }
           : <String, dynamic>{'user-agent': getRandomUA()};
-      final response = await DioFactory.apiDio.getUri(
-        target,
+      final response = await DioFactory.apiDio.get(
+        target.toString(),
         queryParameters: queryParameters,
         options: Options(headers: requestHeaders),
         cancelToken: cancelToken,
@@ -132,8 +132,8 @@ class DanmakuClient {
       throw const DanmakuProviderUnavailable();
     }
     try {
-      final response = await DioFactory.apiDio.getUri(
-        fallback,
+      final response = await DioFactory.apiDio.get(
+        fallback.toString(),
         queryParameters: {'keyword': keyword},
         options: Options(headers: {'user-agent': getRandomUA()}),
       );
