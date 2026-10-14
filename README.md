@@ -1,5 +1,14 @@
 # 随播 · Suibo
 
+## 操作与设置日志（GitHub 可见）
+
+**开发、规则、配置、Render 部署、弹幕验收、Android/Windows 构建、签名与交付**统一写入 GitHub 操作日志，并附提交和运行证据。日志只记录非敏感设置，不公开 JKS、密码或服务密钥。
+
+- **[随播 2.3.15：2026-10-14 完整操作与配置日志](docs/devlogs/2026-10-14-suibo-2.3.15-operations-and-settings.md)**
+- [操作日志索引与今后每轮记录要求](docs/devlogs/README.md)
+- [本版正在开发的 PR #12](https://github.com/luxiaoshi838-jpg/Jiang-Lab-Player/pull/12)（尚未合并到 main）
+
+
 Windows PC 与 Android **通用视频播放器**（基于 [Kazumi](https://github.com/Predidit/Kazumi) 的独立改造版）。
 
 - 平台：Windows 10/11、Android
