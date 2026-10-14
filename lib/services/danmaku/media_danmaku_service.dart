@@ -107,13 +107,15 @@ class MediaDanmakuService {
         final candidates = await DanmakuApi.searchAnimes(query.trim());
         final chosen = selectAnime(candidates, query);
         if (chosen == null) continue;
-        final details = await DanmakuApi.getDanDanEpisodesByDanDanBangumiID(
-          chosen.animeId,
-          preferCompatible: chosen.compatibleProvider,
-          strictProvider: true,
-        );
+        final episodeList = chosen.episodes.isNotEmpty
+            ? chosen.episodes
+            : (await DanmakuApi.getDanDanEpisodesByDanDanBangumiID(
+                chosen.animeId,
+                preferCompatible: chosen.compatibleProvider,
+                strictProvider: true,
+              )).episodes;
         final episodeId = selectEpisodeId(
-          details.episodes,
+          episodeList,
           episode,
           episodeTitle: episodeTitle,
         );
