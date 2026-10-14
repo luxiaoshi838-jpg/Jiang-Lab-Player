@@ -136,22 +136,18 @@ void main() {
   });
 
   test('danmu_api automatic match checks exact work and episode', () {
-    final matched = {
-      'isMatched': true,
-      'matches': [
-        {
-          'animeTitle': '亮剑',
-          'episodeTitle': '第1集',
-          'episodeId': 8301,
-        }
-      ],
+    final firstEpisode = {
+      'animeTitle': '亮剑',
+      'episodeTitle': '第1集',
+      'episodeId': 8301,
     };
+    final matched = {'isMatched': true, 'matches': [firstEpisode]};
     expect(MediaDanmakuService.selectCompatibleMatchId(matched, '亮剑', 1), 8301);
     expect(MediaDanmakuService.selectCompatibleMatchId(matched, '亮剑', 2), isNull);
     expect(MediaDanmakuService.selectCompatibleMatchId(matched, '新亮剑', 1), isNull);
     expect(MediaDanmakuService.selectCompatibleMatchId({
       'isMatched': true,
-      'matches': [matched['matches']![0], matched['matches']![0]],
+      'matches': [firstEpisode, firstEpisode],
     }, '亮剑', 1), isNull);
     expect(MediaDanmakuService.selectCompatibleMatchId(
       {'isMatched': false, 'matches': matched['matches']}, '亮剑', 1,
