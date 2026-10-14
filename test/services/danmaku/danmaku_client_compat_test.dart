@@ -55,6 +55,26 @@ void main() {
     expect(official.animes.single.compatibleProvider, isFalse);
   });
 
+  test('compatible episode search retains exact IDs from its payload', () {
+    final response = DanmakuSearchResponse.fromJson({
+      'success': true,
+      'animes': [
+        {
+          'animeId': 9021,
+          'animeTitle': '亮剑(2005)【电视剧】from 360',
+          'typeDescription': '电视剧',
+          'episodes': [
+            {'episodeId': '920001', 'episodeTitle': '正片', 'episodeNumber': '1'},
+          ],
+        },
+      ],
+    }, compatibleProvider: true);
+    expect(response.animes.single.compatibleProvider, isTrue);
+    expect(response.animes.single.episodes, hasLength(1));
+    expect(response.animes.single.episodes.single.episodeId, 920001);
+    expect(response.animes.single.episodes.single.episodeNumber, 1);
+  });
+
   test('malformed and explicitly rejected provider data is not a valid empty result', () {
     expect(
       () => DanmakuSearchResponse.fromJson(<String, dynamic>{'success': false, 'animes': []}),
