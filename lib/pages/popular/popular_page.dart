@@ -2,7 +2,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:kazumi/bean/widget/bangumi_mirror_error_widget.dart';
-import 'package:kazumi/bean/widget/kazumi_menu.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
 import 'package:kazumi/pages/popular/popular_controller.dart';
 import 'package:kazumi/pages/popular/home_recommendations.dart';
@@ -194,45 +193,16 @@ class _PopularPageState extends State<PopularPage> {
                       left: 16, top: 8, bottom: 8, right: 60),
                   child: SizedBox(
                     height: 44,
-                    child: Observer(
-                      builder: (_) {
-                        final bool isTrend = popularController.currentTag == '';
-                        return KazumiMenuButton(
-                          animated: true,
-                          style: const MenuStyle(
-                            maximumSize: WidgetStatePropertyAll(Size(240, 350)),
-                          ),
-                          menuChildren: [
-                            for (final tag in ['', ...defaultAnimeTags])
-                              KazumiMenuItem(
-                                label: tag.isEmpty ? '四类推荐' : '番剧 · $tag',
-                                selected: tag == popularController.currentTag,
-                                onPressed: () => _selectTag(tag),
-                              ),
-                          ],
-                          builder: (context, toggle) => InkWell(
-                            borderRadius: BorderRadius.circular(8),
-                            onTap: toggle,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  isTrend ? '四类推荐' : '番剧 · ${popularController.currentTag}',
-                                  style: theme.textTheme.headlineMedium!.copyWith(
-                                    fontWeight: fontWeight,
-                                    fontSize: fontSize,
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                Icon(Icons.keyboard_arrow_down,
-                                    size: fontSize, color: theme.iconTheme.color),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '随播',
+                        style: theme.textTheme.headlineMedium!.copyWith(
+                          fontWeight: fontWeight,
+                          fontSize: fontSize,
+                        ),
+                      ),
+                    ),,
                 ),
               );
             },
