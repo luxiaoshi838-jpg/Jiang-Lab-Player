@@ -334,6 +334,7 @@ abstract class _PlayerDanmakuController with Store {
       var res = await DanmakuApi.getDanDanmakuByEpisodeID(
         episodeID,
         preferCompatible: preferCompatible,
+        strictProvider: true,
       );
       addDanmakus(res);
       return res.isNotEmpty;
