@@ -207,16 +207,17 @@ class _DanmakuSourceSheetState extends State<_DanmakuSourceSheet> {
       _segmentStart = null;
     });
     try {
-      final response =
-          await DanmakuApi.getDanDanEpisodesByDanDanBangumiID(
-        anime.animeId,
-        preferCompatible: anime.compatibleProvider,
-        strictProvider: true,
-      );
+      final episodes = anime.episodes.isNotEmpty
+          ? anime.episodes
+          : (await DanmakuApi.getDanDanEpisodesByDanDanBangumiID(
+              anime.animeId,
+              preferCompatible: anime.compatibleProvider,
+              strictProvider: true,
+            )).episodes;
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _episodes = response.episodes;
+        _episodes = episodes;
         if (_episodes.isEmpty) _error = '暂无分集';
       });
     } catch (error) {
