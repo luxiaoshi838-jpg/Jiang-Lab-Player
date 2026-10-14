@@ -555,6 +555,7 @@ abstract class _VideoPageController with Store implements Disposable {
       final entries = await DanmakuApi.getDanDanmakuByEpisodeID(
         remembered.episodeId,
         preferCompatible: remembered.compatibleProvider,
+        strictProvider: true,
       );
       if (entries.isEmpty) return null;
       return DanmakuLoadResult.success(danmakus: entries, bangumiID: 0);
