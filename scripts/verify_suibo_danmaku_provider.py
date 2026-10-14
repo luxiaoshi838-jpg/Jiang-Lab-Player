@@ -12,7 +12,7 @@ from urllib.request import Request, urlopen
 OFFICIAL = "https://api.dandanplay.net"
 APPID = os.getenv("DANDANAPI_APPID", "").strip()
 KEY = os.getenv("DANDANAPI_KEY", "").strip()
-COMPAT = os.getenv("SUIBO_DANMU_API_URL", "").strip().rstrip("/")
+COMPAT = (os.getenv("SUIBO_DANMU_API_URL", "").strip() or "https://suibo-danmaku.onrender.com").rstrip("/")
 WORKS = ("凡人修仙传", "亮剑")
 
 
@@ -40,8 +40,8 @@ def get_json(base, path, query, official=False):
         })
     req = Request(url, headers=headers)
     with urlopen(req, timeout=12) as r:
-        raw = r.read(3_000_001)
-    if len(raw) > 3_000_000:
+        raw = r.read(8_000_001)
+    if len(raw) > 8_000_000:
         raise ValueError("Oversized API response")
     payload = json.loads(raw)
     if not isinstance(payload, dict):
