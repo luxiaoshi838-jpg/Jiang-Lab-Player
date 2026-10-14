@@ -247,7 +247,7 @@ class MediaDanmakuService {
     // Strip only this metadata; never conflate 新亮剑 with 亮剑.
     final remoteTitle = (candidate['animeTitle'] ?? '').toString();
     final undecorated = remoteTitle.replaceFirst(
-      RegExp(r'【[^】]+】from\\s*[A-Za-z0-9_-]+$'), '').trim();
+      RegExp(r'【[^】]+】from\s*[A-Za-z0-9_-]+$'), '').trim();
     final noYear = undecorated.replaceFirst(
       RegExp(r'[（(](?:19|20)[0-9]{2}[)）]$'), '').trim();
     final exact = titlesMatch(title, remoteTitle) ||
