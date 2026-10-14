@@ -122,7 +122,17 @@ class MediaDanmakuService {
       episodeTitle: episodeTitle,
       pageUrls: pageUrls,
     );
-    return communityMatch;
+    if (communityMatch != null && communityMatch.entries.isNotEmpty) {
+      return communityMatch;
+    }
+    // Works played through CMS sources generally have CDN m3u8 URLs rather
+    // than official platform URLs. Resolve the exact work and episode from
+    // public catalogue metadata; never guess from a CDN basename.
+    return _matchOfficialCatalog(
+      title: title,
+      aliases: titleAliases,
+      episode: episode,
+    );
   }
 
   /// A DanDanPlay-compatible community aggregator provides movie, drama and
@@ -303,6 +313,148 @@ class MediaDanmakuService {
     // Strip nonessential query parameters from slice URLs: they may carry
     // transient CDN tracking identifiers even when not named as secrets.
     return knownSlice ? uri.replace(query: '') : uri;
+  }
+
+  /// Public 360kan metadata can provide the official video page of a CMS
+  /// drama. Each public provider receives ONLY this public page URL, not a
+  /// signed/private CMS media URL, a cookie, or an app credential.
+  static bool isOfficialDanmakuPage(String url) {
+    final uri = publicDanmakuVideoUrl(url);
+    if (uri == null || uri.scheme != 'https') return false;
+    const hosts = <String>{
+      'v.qq.com', 'www.iqiyi.com', 'www.mgtv.com',
+      'v.youku.com', 'www.bilibili.com', 'www.miguvideo.com',
+    };
+    return hosts.contains(uri.host.toLowerCase());
+  }
+
+  /// Extract only the Nth numbered page from an exact catalogue title.
+  /// Avoid using a series landing page as if it identified episode 1.
+  static String? officialEpisodePage(Map<dynamic, dynamic> item, int episode) {
+    if (episode <= 0) return null;
+    final pages = item['seriesPlaylinks'];
+    if (pages is List && pages.length >= episode) {
+      final selected = pages[episode - 1];
+      final url = (selected is Map ? selected['url'] : selected).toString();
+      if (isOfficialDanmakuPage(url)) return url;
+    }
+    if (item['cat_name'] == '电影' && episode == 1) {
+      final all = item['playlinks'];
+      if (all is Map) {
+        final valid = all.values.map((v) => v.toString())
+            .where(isOfficialDanmakuPage).toList();
+        if (valid.length == 1) return valid.single;
+      }
+    }
+    return null;
+  }
+
+  static Future<MediaDanmakuMatch?> _matchOfficialCatalog({
+    required String title,
+    required Iterable<String> aliases,
+    required int episode,
+  }) async {
+    final searched = <String>{};
+    for (final name in <String>[title, ...aliases]) {
+      final query = name.trim();
+      if (query.isEmpty || !searched.add(normalizeTitle(query))) continue;
+      if (searched.length > 2) break;
+      try {
+        final response = await DioFactory.apiDio.get(
+          'https://api.so.360kan.com/index',
+          queryParameters: {
+            'force_v': 1, 'kw': query, 'from': '',
+            'pageno': 1, 'v_ap': 1, 'tab': 'all',
+          },
+          options: Options(receiveTimeout: const Duration(seconds: 7)),
+        ).timeout(const Duration(seconds: 9));
+        dynamic body = response.data;
+        if (body is String) body = jsonDecode(body);
+        if (body is! Map || body['data'] is! Map) continue;
+        final data = body['data'] as Map;
+        if (data['longData'] is! Map) continue;
+        final rows = (data['longData'] as Map)['rows'];
+        if (rows is! List) continue;
+        final exact = rows.whereType<Map>().where((row) =>
+          titlesMatch(query, (row['titleTxt'] ?? '').toString()) &&
+          <String>{'电视剧', '动漫', '电影'}.contains(row['cat_name'])
+        ).toList();
+        // A homonym with multiple editions must never be chosen arbitrarily.
+        if (exact.length != 1) continue;
+        final item = exact.single;
+        final urls = <String>[];
+        final first = officialEpisodePage(item, episode);
+        if (first != null) urls.add(first);
+        if (urls.isEmpty && item['cat_name'] != '电影') {
+          final cat = item['cat_name'] == '动漫' ? 4 : 2;
+          final id = item['en_id'];
+          final sites = item['playlinks'];
+          if (id != null && sites is Map) {
+            for (final site in sites.keys.take(3)) {
+              try {
+                final arg = jsonEncode([{
+                  'cat_id': '$cat',
+                  'ent_id': '$id',
+                  'site': '$site',
+                }]);
+                final eps = await DioFactory.apiDio.get(
+                  'https://api.so.360kan.com/episodesv2',
+                  queryParameters: {'v_ap': 1, 's': arg},
+                  options: Options(receiveTimeout: const Duration(seconds: 7)),
+                ).timeout(const Duration(seconds: 9));
+                dynamic result = eps.data;
+                if (result is String) result = jsonDecode(result);
+                if (result is! Map || result['data'] is! List) continue;
+                final list = result['data'] as List;
+                if (list.isEmpty || list.first is! Map) continue;
+                final section = (list.first as Map)['seriesHTML'];
+                if (section is! Map) continue;
+                final entries = section['seriesPlaylinks'] ??
+                    section['series_playlinks'];
+                if (entries is! List || entries.length < episode) continue;
+                final target = entries[episode - 1];
+                final url = (target is Map ? target['url'] : target).toString();
+                if (isOfficialDanmakuPage(url)) urls.add(url);
+              } catch (error) {
+                KazumiLogger().w('MediaDanmaku: 360 episode unavailable',
+                    error: error);
+              }
+            }
+          }
+        }
+        for (final url in urls.toSet().take(3)) {
+          for (final host in const <String>[
+            'https://dmku.hls.one/', 'https://api.danmu.icu/',
+          ]) {
+            try {
+              final uri = Uri.parse(host).replace(
+                queryParameters: {'ac': 'dm', 'url': url},
+              );
+              final answer = await DioFactory.apiDio.getUri(
+                uri,
+                options: Options(
+                  responseType: ResponseType.plain,
+                  receiveTimeout: const Duration(seconds: 7),
+                ),
+              ).timeout(const Duration(seconds: 9));
+              final entries = parsePublicDanmaku(answer.data.toString());
+              if (entries.isNotEmpty) {
+                return MediaDanmakuMatch(entries);
+              }
+            } catch (error) {
+              KazumiLogger().w(
+                'MediaDanmaku: official-page public library unavailable',
+                error: error,
+              );
+            }
+          }
+        }
+      } catch (error) {
+        KazumiLogger().w('MediaDanmaku: official catalogue unavailable',
+            error: error);
+      }
+    }
+    return null;
   }
 
   static Future<MediaDanmakuMatch?> _matchCommunity({
