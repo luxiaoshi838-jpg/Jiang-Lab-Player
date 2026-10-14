@@ -1,6 +1,14 @@
 name: Suibo real video playback bytes
-# 2.3.16: preserve this specialist check for manual runs only.
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/services/video_source/**'
+      - 'lib/services/plugin/**'
+      - 'lib/services/storage/settings_keys.dart'
+      - 'lib/pages/video/**'
+      - 'scripts/smoke_suibo_playback_real.py'
+      - '.github/workflows/suibo-real-playback.yml'
   workflow_dispatch:
 permissions:
   contents: read

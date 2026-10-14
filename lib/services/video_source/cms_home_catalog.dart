@@ -184,7 +184,7 @@ class CmsHomeCatalog {
     required HomeMediaCategory category,
     required String subcategory,
     required Iterable<Plugin> installedSources,
-    int count = 12,
+    int count = 24,
     HttpClient? client,
   }) async {
     if (category == HomeMediaCategory.anime) return const [];

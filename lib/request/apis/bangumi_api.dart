@@ -247,7 +247,7 @@ class BangumiApi {
   static Future<List<BangumiItem>> getHomeRecommendations({
     required HomeMediaCategory category,
     String subcategory = '',
-    int count = 12,
+    int count = 24,
   }) async {
     final selected = <BangumiItem>[];
     final ids = <int>{};
@@ -255,40 +255,57 @@ class BangumiApi {
         ? const <String>['']
         : category.genreTags;
     for (final kindTag in kindTags) {
-      if (selected.length >= count) break;
-      try {
-        final response = await _client.post(
-          ApiEndpoints.formatUrl(
-            ApiEndpoints.bangumiAPIDomain + ApiEndpoints.bangumiRankSearch,
-            [100, 0],
-          ),
-          data: buildHomeRecommendationParams(
-            category: category,
-            workKindTag: kindTag,
-            subcategory: subcategory,
-          ),
-        );
-        final rows = response['data'];
-        if (rows is! List) continue;
-        for (final row in rows) {
-          if (row is! Map<String, dynamic>) continue;
-          try {
-            final item = BangumiItem.fromJson(row);
-            if (item.type == category.subjectType &&
-                (item.name.isNotEmpty || item.nameCn.isNotEmpty) &&
-                ids.add(item.id)) {
-              selected.add(item);
-            }
-          } catch (error) {
-            KazumiLogger().w('Home entry could not be parsed', error: error);
+      if (selected.length >= count) {
+        break;
+      }
+      var offset = 0;
+      const pageLimit = 100;
+      while (selected.length < count) {
+        try {
+          final response = await _client.post(
+            ApiEndpoints.formatUrl(
+              ApiEndpoints.bangumiAPIDomain + ApiEndpoints.bangumiRankSearch,
+              [pageLimit, offset],
+            ),
+            data: buildHomeRecommendationParams(
+              category: category,
+              workKindTag: kindTag,
+              subcategory: subcategory,
+            ),
+          );
+          final rows = response['data'];
+          if (rows is! List || rows.isEmpty) {
+            break;
           }
-          if (selected.length >= count) break;
+          for (final row in rows) {
+            if (row is! Map<String, dynamic>) {
+              continue;
+            }
+            try {
+              final item = BangumiItem.fromJson(row);
+              if (item.type == category.subjectType &&
+                  (item.name.isNotEmpty || item.nameCn.isNotEmpty) &&
+                  ids.add(item.id)) {
+                selected.add(item);
+              }
+            } catch (error) {
+              KazumiLogger().w('Home entry could not be parsed', error: error);
+            }
+            if (selected.length >= count) {
+              break;
+            }
+          }
+          if (rows.length < pageLimit) {
+            break;
+          }
+          offset += rows.length;
+        } catch (error) {
+          KazumiLogger().w('Home category lookup failed', error: error);
+          break;
         }
-      } catch (error) {
-        KazumiLogger().w('Home category lookup failed', error: error);
       }
     }
-    return selected.take(count).toList(growable: false);
+    return selected;
   }
 
   static String buildBangumiMirrorPopularPath({

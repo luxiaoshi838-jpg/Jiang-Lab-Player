@@ -1,7 +1,7 @@
 name: Suibo real CMS home catalogue probe
-# 2.3.16: preserve legacy checks for manual runs only.
 on:
-  workflow_dispatch:
+  pull_request:
+    branches: [main]
 permissions:
   contents: read
 jobs:

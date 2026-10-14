@@ -51,5 +51,5 @@ enum HomeMediaCategory {
         if (subcategory.isNotEmpty) subcategory,
       ];
 
-  static const int visibleCount = 12;
+  static const int pageSize = 24;
 }

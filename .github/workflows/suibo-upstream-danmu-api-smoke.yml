@@ -1,6 +1,12 @@
 name: Suibo ephemeral upstream danmu_api smoke
-# 2.3.16: preserve this specialist check for manual runs only.
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/probe_suibo_selfhosted_backend.py'
+      - 'services/danmaku/**'
+      - 'render.yaml'
+      - '.github/workflows/suibo-upstream-danmu-api-smoke.yml'
   workflow_dispatch:
 permissions:
   contents: read

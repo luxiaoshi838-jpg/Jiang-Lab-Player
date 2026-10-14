@@ -33,6 +33,11 @@ abstract class _PopularController with Store {
     for (final section in HomeMediaCategory.values) section: false,
   });
 
+  final ObservableMap<HomeMediaCategory, bool> homeHasMore =
+      ObservableMap.of({
+    for (final section in HomeMediaCategory.values) section: true,
+  });
+
   /// One independent selected genre and request token per home category.
   final ObservableMap<HomeMediaCategory, String> homeSelectedTags =
       ObservableMap.of({
@@ -84,12 +89,18 @@ abstract class _PopularController with Store {
     await refreshHomeSection(category);
   }
 
-  Future<void> refreshHomeSection(HomeMediaCategory category) async {
-    // A user can switch genres while the previous request is in flight.
-    // Results from the old selection must never overwrite the latest one.
+  /// Load all five independent catalogues in expandable 24-item batches.
+  Future<void> refreshHomeSection(HomeMediaCategory category,
+      {bool append = false}) async {
+    if (append &&
+        (homeLoading[category] == true || homeHasMore[category] != true)) {
+      return;
+    }
     final generation = (_homeGeneration[category] ?? 0) + 1;
     _homeGeneration[category] = generation;
     final subcategory = homeSelectedTags[category] ?? '';
+    final requested = (append ? homeItems[category]!.length : 0) +
+        HomeMediaCategory.pageSize;
     runInAction(() {
       homeLoading[category] = true;
       homeFailed[category] = false;
@@ -97,51 +108,54 @@ abstract class _PopularController with Store {
     try {
       var entries = category == HomeMediaCategory.anime
           ? await BangumiApi.getHomeRecommendations(
-              category: category,
-              subcategory: subcategory,
-              count: HomeMediaCategory.visibleCount,
-            )
+              category: category, subcategory: subcategory, count: requested)
           : await CmsHomeCatalog.load(
               category: category,
               subcategory: subcategory,
               installedSources: inject<PluginsController>().pluginList,
-              count: HomeMediaCategory.visibleCount,
-            );
-      // Do not backfill film/TV/variety categories from metadata-only
-      // Bangumi entries. Empty playable catalogues must be labelled empty.
-      // Preserve the original anime popularity feed ONLY for its default
-      // unfiltered category. Other genres cannot borrow unrelated items.
-      if (entries.isEmpty &&
-          category == HomeMediaCategory.anime &&
-          subcategory.isEmpty) {
-        entries = _bangumiMirrorEnabled
-            ? await BangumiApi.getBangumiMirrorPopularSubjects(
-                limit: HomeMediaCategory.visibleCount,
-              )
-            : await BangumiApi.getBangumiTrendsList(
-                type: 2,
-                limit: HomeMediaCategory.visibleCount,
-              );
+              count: requested);
+      // A failed ranking endpoint can return [] for a valid anime tag.
+      if (entries.isEmpty && category == HomeMediaCategory.anime) {
+        entries = await BangumiApi.getBangumiMirrorPopularSubjects(
+            tag: subcategory, limit: requested);
+        if (entries.isEmpty && subcategory.isNotEmpty) {
+          entries = await BangumiApi.getBangumiList(rank: 0, tag: subcategory);
+        }
+        if (entries.isEmpty && subcategory.isEmpty) {
+          entries = await BangumiApi.getBangumiTrendsList(
+              type: 2, limit: requested);
+        }
+        entries = entries.where((item) => item.type == 2).toList();
       }
-      if (_homeGeneration[category] != generation) return;
+      if (_homeGeneration[category] != generation) {
+        return;
+      }
+      final seen = <int>{};
+      final unique = entries.where((entry) => seen.add(entry.id)).toList();
       runInAction(() {
-        final seen = <int>{};
         homeItems[category]!
           ..clear()
-          ..addAll(entries.where((entry) => seen.add(entry.id)).take(
-                HomeMediaCategory.visibleCount,
-              ));
-        homeFailed[category] = homeItems[category]!.isEmpty;
+          ..addAll(unique);
+        homeFailed[category] = unique.isEmpty;
+        homeHasMore[category] = unique.length >= requested;
       });
     } catch (_) {
-      if (_homeGeneration[category] != generation) return;
-      runInAction(() => homeFailed[category] = true);
+      if (_homeGeneration[category] != generation) {
+        return;
+      }
+      runInAction(() {
+        homeFailed[category] = homeItems[category]!.isEmpty;
+        homeHasMore[category] = false;
+      });
     } finally {
       if (_homeGeneration[category] == generation) {
         runInAction(() => homeLoading[category] = false);
       }
     }
   }
+
+  Future<void> loadMoreHomeSection(HomeMediaCategory category) =>
+      refreshHomeSection(category, append: true);
 
   void setCurrentTag(String s) {
     currentTag = s;

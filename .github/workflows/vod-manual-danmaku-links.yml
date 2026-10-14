@@ -1,7 +1,7 @@
 name: VOD remembered danmaku links
-# 2.3.16: preserve this specialist check for manual runs only.
 on:
-  workflow_dispatch:
+  pull_request:
+    branches: [main]
 permissions:
   contents: read
 jobs:

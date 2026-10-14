@@ -283,14 +283,15 @@ class InfoEpisodeSectionState extends State<InfoEpisodeSection> {
             ],
           ),
           if (_loading)
-            const Padding(
-              padding: EdgeInsets.all(18),
+            const Expanded(
               child: Center(child: CircularProgressIndicator()),
             )
           else if (!_ready)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              child: Text(_error ?? '暂无可用集数'),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                child: Text(_error ?? '暂无可用集数'),
+              ),
             )
           else ...[
             if (_roads.length > 1)
@@ -348,16 +349,15 @@ class InfoEpisodeSectionState extends State<InfoEpisodeSection> {
                   ),
                 ),
               ),
-            LayoutBuilder(builder: (context, box) {
+            Expanded(child: LayoutBuilder(builder: (context, box) {
               final columns = box.maxWidth >= 900
                   ? 8
                   : box.maxWidth >= 560
                       ? 6
                       : 3;
               return GridView.builder(
-                key: const ValueKey('suibo-episode-grid'),
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
+                key: ValueKey('suibo-episode-grid-$_roadIndex-$_page'),
+                physics: const ClampingScrollPhysics(),
                 itemCount: last - first,
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: columns,
@@ -389,7 +389,7 @@ class InfoEpisodeSectionState extends State<InfoEpisodeSection> {
                   );
                 },
               );
-            }),
+            })),
           ],
         ],
       ),

@@ -93,8 +93,8 @@ void main() {
       );
     });
 
-    test('five sections retain the twelve-item grid contract', () {
-      expect(HomeMediaCategory.visibleCount, 12);
+    test('five sections support expandable 24-item batches', () {
+      expect(HomeMediaCategory.pageSize, 24);
       expect(HomeMediaCategory.values.map((x) => x.popularTitle).toList(),
           ['热门番剧', '热门电影', '热门电视剧', '热门短剧', '热门综艺']);
     });

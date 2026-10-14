@@ -184,10 +184,11 @@ class _HomeSection extends StatelessWidget {
                 ),
               );
             }
-            final count = items.length > HomeMediaCategory.visibleCount
-                ? HomeMediaCategory.visibleCount
-                : items.length;
-            return GridView.builder(
+            final count = items.length;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               padding: const EdgeInsets.all(8),
@@ -201,6 +202,22 @@ class _HomeSection extends StatelessWidget {
               itemCount: count,
               itemBuilder: (context, index) =>
                   BangumiCardV(bangumiItem: items[index]),
+                ),
+                if (loading)
+                  const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (controller.homeHasMore[category] == true)
+                  Center(
+                    child: TextButton.icon(
+                      key: ValueKey('suibo-load-more-${category.name}'),
+                      onPressed: () => controller.loadMoreHomeSection(category),
+                      icon: const Icon(Icons.expand_more),
+                      label: const Text('加载更多'),
+                    ),
+                  ),
+              ],
             );
           }),
         ],

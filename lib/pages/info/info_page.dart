@@ -382,7 +382,13 @@ class _InfoPageState extends State<InfoPage>
     final showWindowButton = DesktopWindowConfig.showWindowButton;
     final topOffset = Platform.isMacOS && showWindowButton ? 22.0 : 0.0;
     return Scaffold(
-      body: NestedScrollView(
+      body: LayoutBuilder(builder: (context, constraints) {
+        final selectorHeight =
+            (constraints.maxHeight * 0.38).clamp(170.0, 310.0).toDouble();
+        return Column(
+          children: [
+            Expanded(
+              child: NestedScrollView(
         headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
           return <Widget>[
             SliverOverlapAbsorber(
@@ -499,10 +505,6 @@ class _InfoPageState extends State<InfoPage>
         body: Observer(builder: (context) {
           final showBangumiInfoSkeleton = _isShowingBangumiInfoSkeleton;
           return InfoTabView(
-            episodeSection: InfoEpisodeSection(
-              key: _episodeSectionKey,
-              infoController: infoController,
-            ),
             tabController: infoTabController,
             bangumiItem: infoController.bangumiItem,
             commentsQueryTimeout: commentsQueryTimeout,
@@ -527,8 +529,23 @@ class _InfoPageState extends State<InfoPage>
             isLoading: showBangumiInfoSkeleton,
           );
         }),
-      ),
-
+              ),
+            ),
+            // Persistent bottom episode selector stays outside the five
+            // horizontally swipeable/independently scrollable detail tabs.
+            SafeArea(
+              top: false,
+              child: SizedBox(
+                height: selectorHeight,
+                child: Observer(builder: (context) => InfoEpisodeSection(
+                  key: _episodeSectionKey,
+                  infoController: infoController,
+                )),
+              ),
+            ),
+          ],
+        );
+      }),
     );
   }
 }

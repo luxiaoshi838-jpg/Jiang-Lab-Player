@@ -208,6 +208,7 @@ abstract class _SearchPageController with Store {
             title: title,
             url: result.src,
             imageUrl: result.imageUrl,
+            mediaType: batch[i].type.trim().toLowerCase() == 'anime' ? 2 : 0,
           ));
         }
       }
