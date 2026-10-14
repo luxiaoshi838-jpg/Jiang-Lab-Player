@@ -95,6 +95,9 @@ void main() {
     final chapterRequest = parser.prepareRequest(
         rule.chapterApiConfig.request, {'source': '123'});
     expect(chapterRequest.query['ids'], '123');
+    // Standard CMS Provide details are requested explicitly; a category
+    // listing alone does not guarantee episode playback addresses.
+    expect(chapterRequest.query['ac'], 'detail');
     final chapters = parser.parseChapters(jsonEncode({
       'list': [
         {

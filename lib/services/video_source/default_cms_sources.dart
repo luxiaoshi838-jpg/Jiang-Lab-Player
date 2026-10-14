@@ -116,7 +116,7 @@ class DefaultCmsSources {
         'request': <String, dynamic>{
           'method': 'GET',
           'url': endpoint,
-          'query': <String, dynamic>{'ac': 'videolist', 'ids': '@source'},
+          'query': <String, dynamic>{'ac': 'detail', 'ids': '@source'},
         },
         'format': 'delimited',
         'roadNamesPath': r'$.list[0].vod_play_from',
