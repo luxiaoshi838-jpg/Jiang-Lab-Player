@@ -87,6 +87,23 @@ void main() {
     expect(MediaDanmakuService.selectEpisodeId(episodes, 4), isNull);
   });
 
+  test('numeric episodeNumber from upstream selects an unlabelled drama entry', () {
+    final detail = DanmakuEpisodeResponse.fromJson({
+      'success': true, 'errorCode': 0, 'errorMessage': '',
+      'bangumi': {
+        'animeId': '9001',
+        'episodes': [
+          {'episodeId': '81001', 'episodeTitle': '正片', 'episodeNumber': '1'},
+          {'episodeId': 81002, 'episodeTitle': '正片', 'episodeNumber': '2'},
+        ],
+      },
+    });
+    expect(detail.bangumiId, 9001);
+    expect(MediaDanmakuService.selectEpisodeId(detail.episodes, 1), 81001);
+    expect(MediaDanmakuService.selectEpisodeId(detail.episodes, 2), 81002);
+    expect(MediaDanmakuService.selectEpisodeId(detail.episodes, 3), isNull);
+  });
+
   test('date-labelled variety episodes match their actual date', () {
     final episodes = [
       DanmakuEpisode(episodeId: 501, episodeTitle: '2025-08-09 第1期'),
