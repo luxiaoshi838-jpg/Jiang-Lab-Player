@@ -342,6 +342,34 @@ class MediaDanmakuService {
     required String episodeTitle,
     required int episode,
   }) async {
+    // Resolve known title and episode through the compatible provider first.
+    // URL-only lookups can take many seconds and delay the reliable /match path.
+    // The installed danmu_api protocol has a POST /api/v2/match endpoint.
+    // This resolves a precise episode from a filename before fetching comments.
+    // The default api.danmu.icu URL-based XML service does NOT implement it.
+    if (Uri.tryParse(communityDanmakuApi)?.host != 'api.danmu.icu') {
+      final checked = <String>{};
+      for (final name in <String>[title, ...titleAliases]) {
+        final query = name.trim();
+        if (query.isEmpty || !checked.add(normalizeTitle(query))) continue;
+        if (checked.length > 3) break;
+        try {
+          final filename = '$query.S01E${episode.toString().padLeft(2, '0')}';
+          final matched = await _communityPost(
+              '/api/v2/match', {'fileName': filename});
+          final episodeId = selectCompatibleMatchId(
+              matched, query, episode, episodeTitle: episodeTitle);
+          if (episodeId == null) continue;
+          final comments = parseCommunityComments(await _communityGet(
+              '/api/v2/comment/$episodeId', const {'format': 'json'}));
+          if (comments.isNotEmpty) return MediaDanmakuMatch(comments);
+        } catch (error) {
+          KazumiLogger().w('CommunityDanmaku: automatic match unavailable',
+              error: error);
+        }
+      }
+    }
+
     // Use recognized official VOD pages and safe public slice URLs.
     // CMS streams can carry the original playback identity which the
     // public library supports, but signed/private links are never sent.
@@ -377,32 +405,6 @@ class MediaDanmakuService {
       }
     }
 
-    // The installed danmu_api protocol has a POST /api/v2/match endpoint.
-    // This resolves a precise episode from a filename before fetching comments.
-    // The default api.danmu.icu URL-based XML service does NOT implement it.
-    if (Uri.tryParse(communityDanmakuApi)?.host != 'api.danmu.icu') {
-      final checked = <String>{};
-      for (final name in <String>[title, ...titleAliases]) {
-        final query = name.trim();
-        if (query.isEmpty || !checked.add(normalizeTitle(query))) continue;
-        if (checked.length > 3) break;
-        try {
-          final filename = '$query.S01E${episode.toString().padLeft(2, '0')}';
-          final matched = await _communityPost(
-              '/api/v2/match', {'fileName': filename});
-          final episodeId = selectCompatibleMatchId(
-              matched, query, episode, episodeTitle: episodeTitle);
-          if (episodeId == null) continue;
-          final comments = parseCommunityComments(await _communityGet(
-              '/api/v2/comment/$episodeId', const {'format': 'json'}));
-          if (comments.isNotEmpty) return MediaDanmakuMatch(comments);
-        } catch (error) {
-          KazumiLogger().w('CommunityDanmaku: automatic match unavailable',
-              error: error);
-        }
-      }
-    }
-
     // Only a configured DanDanPlay-compatible service offers title search.
     // Do not call non-existent /api/v2 endpoints on the public XML service.
     if (Uri.tryParse(communityDanmakuApi)?.host == 'api.danmu.icu') {
@@ -418,16 +420,21 @@ class MediaDanmakuService {
             '/api/v2/search/episodes', {'anime': query, 'episode': '$episode'});
         if (rawSearch is! Map || rawSearch['animes'] is! List) continue;
         final response = DanmakuSearchResponse.fromJson(
-            Map<String, dynamic>.from(rawSearch));
+          Map<String, dynamic>.from(rawSearch),
+          compatibleProvider: true,
+        );
         final show = selectAnime(response, query);
         if (show == null) continue;
-        final rawDetail = await _communityGet(
-            '/api/v2/bangumi/${show.animeId}', const {});
-        if (rawDetail is! Map || rawDetail['bangumi'] is! Map) continue;
-        final detail = DanmakuEpisodeResponse.fromJson(
-            Map<String, dynamic>.from(rawDetail));
+        var episodes = show.episodes;
+        if (episodes.isEmpty) {
+          final rawDetail = await _communityGet(
+              '/api/v2/bangumi/${show.animeId}', const {});
+          if (rawDetail is! Map || rawDetail['bangumi'] is! Map) continue;
+          episodes = DanmakuEpisodeResponse.fromJson(
+              Map<String, dynamic>.from(rawDetail)).episodes;
+        }
         final episodeId = selectEpisodeId(
-            detail.episodes, episode, episodeTitle: episodeTitle);
+            episodes, episode, episodeTitle: episodeTitle);
         if (episodeId == null) continue;
         final comments = parseCommunityComments(await _communityGet(
             '/api/v2/comment/$episodeId', const {'format': 'json'}));
