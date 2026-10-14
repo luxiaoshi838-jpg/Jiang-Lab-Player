@@ -96,15 +96,22 @@ class MediaDanmakuService {
         final candidates = await DanmakuApi.searchAnimes(query.trim());
         final chosen = selectAnime(candidates, query);
         if (chosen == null) continue;
-        final details =
-            await DanmakuApi.getDanDanEpisodesByDanDanBangumiID(chosen.animeId);
+        final details = await DanmakuApi.getDanDanEpisodesByDanDanBangumiID(
+          chosen.animeId,
+          preferCompatible: chosen.compatibleProvider,
+          strictProvider: true,
+        );
         final episodeId = selectEpisodeId(
           details.episodes,
           episode,
           episodeTitle: episodeTitle,
         );
         if (episodeId == null) continue;
-        final comments = await DanmakuApi.getDanDanmakuByEpisodeID(episodeId);
+        final comments = await DanmakuApi.getDanDanmakuByEpisodeID(
+          episodeId,
+          preferCompatible: chosen.compatibleProvider,
+          strictProvider: true,
+        );
         if (comments.isNotEmpty) {
           return MediaDanmakuMatch(comments, dandanId: chosen.animeId);
         }
