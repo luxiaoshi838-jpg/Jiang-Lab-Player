@@ -558,7 +558,8 @@ class MediaDanmakuService {
     final matches = entries.where((entry) {
       if (_edition(entry.episodeTitle) != requestedEdition) return false;
       if (requestedDate != null) return _date(entry.episodeTitle) == requestedDate;
-      return _episodeNumber(entry.episodeTitle) == episode;
+      final fromTitle = _episodeNumber(entry.episodeTitle);
+      return (fromTitle ?? entry.episodeNumber) == episode;
     }).toList();
     if (matches.length == 1) return matches.single.episodeId;
     if (matches.isNotEmpty || requestedDate != null) return null;
