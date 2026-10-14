@@ -69,6 +69,7 @@ class MediaDanmakuService {
     required Iterable<String> pageUrls,
     Iterable<String> titleAliases = const <String>[],
     String episodeTitle = '',
+    bool preferAnimation = false,
   }) async {
     // Native CID is an exact identity for a single Bilibili video page.
     for (final url in pageUrls) {
@@ -105,7 +106,8 @@ class MediaDanmakuService {
       }
       try {
         final response = await DanmakuApi.searchAnimes(query.trim());
-        for (final chosen in matchingSourceCandidates(response, query)) {
+        for (final chosen in matchingSourceCandidates(
+          response, query, preferAnimation: preferAnimation)) {
           try {
             final episodeList = chosen.episodes.isNotEmpty
                 ? chosen.episodes
@@ -531,10 +533,19 @@ class MediaDanmakuService {
   /// Reject conflicting release years, but try each verified source of the
   /// same work until a real episode with nonempty comments is found.
   static List<DanmakuSearchAnime> matchingSourceCandidates(
-      DanmakuSearchResponse response, String title) {
+      DanmakuSearchResponse response, String title, {
+      bool preferAnimation = false,
+    }) {
     if (response.hasMore) return const [];
     final selected = <String, DanmakuSearchAnime>{};
     for (final item in response.animes) {
+      if (preferAnimation) {
+        final type = item.typeDescription.toLowerCase();
+        if (type.contains('电视剧') || type.contains('真人') ||
+            type.contains('短剧') || type.contains('综艺')) {
+          continue;
+        }
+      }
       if (titlesMatch(title, _candidateTitle(item))) {
         selected['${item.compatibleProvider}:${item.animeId}'] = item;
       }
