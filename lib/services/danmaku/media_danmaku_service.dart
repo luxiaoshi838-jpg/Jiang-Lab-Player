@@ -219,6 +219,49 @@ class MediaDanmakuService {
     return result;
   }
 
+  /// Match IDs are short-lived identities owned by a compatible danmu_api
+  /// server, not global DanDanPlay IDs. Reject ambiguous matches and episode
+  /// mismatches rather than displaying another programme's comments.
+  static int? selectCompatibleMatchId(
+    dynamic response,
+    String title,
+    int episode, {
+    String episodeTitle = '',
+  }) {
+    if (response is! Map || response['isMatched'] != true) return null;
+    final matches = response['matches'];
+    if (matches is! List || matches.length != 1) return null;
+    final candidate = matches.single;
+    if (candidate is! Map ||
+        !titlesMatch(title, (candidate['animeTitle'] ?? '').toString())) {
+      return null;
+    }
+    final label = (candidate['episodeTitle'] ?? '').toString();
+    final number = _episodeNumber(label);
+    final requestedDate = _date(episodeTitle);
+    if (_edition(label) != _edition(episodeTitle) ||
+        (requestedDate != null && _date(label) != requestedDate) ||
+        (requestedDate == null && number != episode)) {
+      return null;
+    }
+    final id = int.tryParse((candidate['episodeId'] ?? '').toString());
+    return id != null && id > 0 ? id : null;
+  }
+
+  static Future<dynamic> _communityPost(
+      String path, Map<String, String> data) async {
+    final uri = communityUri(path);
+    if (uri == null || uri.scheme != 'https') return null;
+    return (await DioFactory.apiDio.postUri(
+      uri,
+      data: data,
+      options: Options(
+        sendTimeout: const Duration(seconds: 8),
+        receiveTimeout: const Duration(seconds: 8),
+      ),
+    ).timeout(const Duration(seconds: 10))).data;
+  }
+
   static Future<dynamic> _communityGet(
       String path, Map<String, String> query) async {
     final uri = communityUri(path, query);
@@ -304,6 +347,37 @@ class MediaDanmakuService {
       }
     }
 
+    // The installed danmu_api protocol has a POST /api/v2/match endpoint.
+    // This resolves a precise episode from a filename before fetching comments.
+    // The default api.danmu.icu URL-based XML service does NOT implement it.
+    if (Uri.tryParse(communityDanmakuApi)?.host != 'api.danmu.icu') {
+      final checked = <String>{};
+      for (final name in <String>[title, ...titleAliases]) {
+        final query = name.trim();
+        if (query.isEmpty || !checked.add(normalizeTitle(query))) continue;
+        if (checked.length > 3) break;
+        try {
+          final filename = '$query.S01E${episode.toString().padLeft(2, '0')}';
+          final matched = await _communityPost(
+              '/api/v2/match', {'fileName': filename});
+          final episodeId = selectCompatibleMatchId(
+              matched, query, episode, episodeTitle: episodeTitle);
+          if (episodeId == null) continue;
+          final comments = parseCommunityComments(await _communityGet(
+              '/api/v2/comment/$episodeId', const {'format': 'json'}));
+          if (comments.isNotEmpty) return MediaDanmakuMatch(comments);
+        } catch (error) {
+          KazumiLogger().w('CommunityDanmaku: automatic match unavailable',
+              error: error);
+        }
+      }
+    }
+
+    // Only a configured DanDanPlay-compatible service offers title search.
+    // Do not call non-existent /api/v2 endpoints on the public XML service.
+    if (Uri.tryParse(communityDanmakuApi)?.host == 'api.danmu.icu') {
+      return null;
+    }
     final searched = <String>{};
     for (final candidate in <String>[title, ...titleAliases]) {
       final query = candidate.trim();
