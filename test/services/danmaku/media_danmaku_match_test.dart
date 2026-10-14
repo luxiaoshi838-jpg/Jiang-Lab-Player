@@ -159,6 +159,31 @@ void main() {
     }, '亮剑', 1), isNull);
   });
 
+  test('catalogue resolves exact TV episodes to public official pages', () {
+    final item = <String, dynamic>{
+      'cat_name': '电视剧',
+      'seriesPlaylinks': [
+        {'url': 'https://v.qq.com/x/cover/abc/episode1.html'},
+        {'url': 'https://v.qq.com/x/cover/abc/episode2.html'},
+      ],
+    };
+    expect(MediaDanmakuService.officialEpisodePage(item, 1),
+        'https://v.qq.com/x/cover/abc/episode1.html');
+    expect(MediaDanmakuService.officialEpisodePage(item, 2),
+        'https://v.qq.com/x/cover/abc/episode2.html');
+    expect(MediaDanmakuService.officialEpisodePage(item, 3), isNull);
+    item['seriesPlaylinks'] = [
+      {'url': 'https://cdn.example.com/1.m3u8'},
+    ];
+    expect(MediaDanmakuService.officialEpisodePage(item, 1), isNull);
+    expect(MediaDanmakuService.isOfficialDanmakuPage(
+        'https://v.qq.com/x/cover/abc/episode1.html'), isTrue);
+    expect(MediaDanmakuService.isOfficialDanmakuPage(
+        'https://cdn.example.com/1.m3u8'), isFalse);
+    expect(MediaDanmakuService.isOfficialDanmakuPage(
+        'http://v.qq.com/x/cover/abc/episode1.html'), isFalse);
+  });
+
   test('classic mainland dramas use explicit numeric episode labels', () {
     final episodes = [
       DanmakuEpisode(episodeId: 7701, episodeTitle: '01'),
