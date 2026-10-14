@@ -35,6 +35,47 @@ void main() {
     expect(MediaDanmakuService.selectAnime(works, '亮剑2'), isNull);
   });
 
+  test('same work from multiple sources can be tried automatically', () {
+    const response = DanmakuSearchResponse(
+      animes: [
+        DanmakuSearchAnime(
+          animeId: 100, animeTitle: '亮剑(2005)【电视剧】from 360',
+          typeDescription: '电视剧', compatibleProvider: true,
+        ),
+        DanmakuSearchAnime(
+          animeId: 101, animeTitle: '亮剑(2005)【电视剧】from qq',
+          typeDescription: '电视剧', compatibleProvider: true,
+        ),
+        DanmakuSearchAnime(
+          animeId: 120, animeTitle: '新亮剑(2011)【电视剧】from 360',
+          typeDescription: '电视剧', compatibleProvider: true,
+        ),
+      ], hasMore: false,
+    );
+    expect(MediaDanmakuService.selectAnime(response, '亮剑'), isNull);
+    expect(
+      MediaDanmakuService.matchingSourceCandidates(response, '亮剑')
+          .map((entry) => entry.animeId).toList(),
+      [100, 101],
+    );
+  });
+
+  test('conflicting release years do not trigger an automatic wrong edition', () {
+    const response = DanmakuSearchResponse(
+      animes: [
+        DanmakuSearchAnime(
+          animeId: 100, animeTitle: '亮剑(2005)【电视剧】from qq',
+          typeDescription: '电视剧', compatibleProvider: true,
+        ),
+        DanmakuSearchAnime(
+          animeId: 120, animeTitle: '亮剑(2011)【电视剧】from 360',
+          typeDescription: '电视剧', compatibleProvider: true,
+        ),
+      ], hasMore: false,
+    );
+    expect(MediaDanmakuService.matchingSourceCandidates(response, '亮剑'), isEmpty);
+  });
+
   test('work title matching tolerates punctuation without guessing seasons', () {
     expect(MediaDanmakuService.normalizeTitle('《一饭封神》'), '一饭封神');
     expect(MediaDanmakuService.titlesMatch('一饭封神 第一季', '一饭封神'), isTrue);
