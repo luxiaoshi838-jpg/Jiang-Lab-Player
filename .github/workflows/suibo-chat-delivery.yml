@@ -45,15 +45,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Launcher icon generation failed" }
           & ./scripts/build_windows_installer.ps1 -OutputDirectory $out
           if ($LASTEXITCODE -ne 0) { throw "Windows installer build failed" }
-          $exe = Join-Path $out "Suibo-Setup-2.3.17-Windows-x64.exe"
+          $exe = Join-Path $out "Suibo-Setup-2.3.18-Windows-x64.exe"
           if (-not (Test-Path $exe)) { throw "Missing installation EXE" }
           if ((Get-Item $exe).Length -lt 1048576) { throw "Truncated installation EXE" }
           echo "SUIBO_SETUP=$exe" >> $env:GITHUB_ENV
-          $report = Join-Path $out "Suibo-Windows-install-report-20317.txt"
+          $report = Join-Path $out "Suibo-Windows-install-report-20318.txt"
           echo "SUIBO_REPORT=$report" >> $env:GITHUB_ENV
       - uses: actions/upload-artifact@v4
         with:
-          name: suibo-windows-2.3.17-setup
+          name: suibo-windows-2.3.18-setup
           path: |
             ${{ env.SUIBO_SETUP }}
             ${{ env.SUIBO_REPORT }}
@@ -103,7 +103,7 @@ jobs:
           echo "SUIBO_APK_STAGE=$RUNNER_TEMP/suibo-apk-stage" >> "$GITHUB_ENV"
       - uses: actions/upload-artifact@v4
         with:
-          name: suibo-android-2.3.17-private-resign
+          name: suibo-android-2.3.18-private-resign
           path: ${{ env.SUIBO_APK_STAGE }}
           retention-days: 1
           if-no-files-found: error

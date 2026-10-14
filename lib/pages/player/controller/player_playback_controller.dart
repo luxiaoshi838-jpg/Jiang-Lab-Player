@@ -235,10 +235,9 @@ abstract class _PlayerPlaybackController with Store {
   /// Android blocks network access for backgrounded apps; a prefetching
   /// demuxer then burns through ffmpeg's reconnect/segment retries and marks
   /// the stream EOF, leaving playback permanently stuck once foregrounded.
-  /// Suspending zeroes the readahead window so no new requests are issued
-  /// while buffered data stays available; restore values are mpv defaults,
-  /// which media_kit leaves untouched. Writes are serialized and apply the
-  /// latest requested state, so rapid lifecycle flips cannot reorder.
+  /// Suspending zeroes the readahead window while buffered data stays
+  /// available. Restore our bounded network prefetch window (not 36000s).
+  /// Writes are serialized so lifecycle flips cannot reorder.
   Future<void> setPrefetchSuspended(bool suspended) async {
     if (!Platform.isAndroid) {
       return;
@@ -252,7 +251,8 @@ abstract class _PlayerPlaybackController with Store {
       }
       try {
         final pp = player.platform as NativePlayer;
-        await pp.setProperty('cache-secs', wanted ? '0' : '36000');
+        await pp.setProperty('cache-secs',
+            wanted ? '0' : PlaybackCachePolicy.networkPrefetchSeconds.toString());
         if (!isCurrentPlayer(player)) {
           return;
         }

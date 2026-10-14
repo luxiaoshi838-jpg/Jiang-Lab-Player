@@ -13,8 +13,23 @@ class PlaybackCachePolicy {
   })  : _isLocalPlayback = isLocalPlayback,
         _currentPlayer = currentPlayer;
 
-  static const int _lowMemoryBufferSize = 2 * 1024 * 1024;
-  static const int _defaultBufferSize = 1500 * 1024 * 1024;
+  // mpv/media_kit uses these values as demuxer packet cache limits, not a
+  // traditional HTTP disk cache. The old 2 MiB mobile cap could starve HLS
+  // segment playback; the 1500 MiB normal cap caused excessive retention.
+  // Keep headroom for mobile and desktop without megabyte-scale stalls.
+  static const int lowMemoryBufferSize = 16 * 1024 * 1024;
+  static const int defaultBufferSize = 96 * 1024 * 1024;
+  static const int maximumBackBufferSize = 24 * 1024 * 1024;
+
+  // Short, bounded forward prefetch. Unlimited (36000s) readahead is both
+  // unnecessary and expensive on metered connections.
+  static const int networkPrefetchSeconds = 30;
+  static const int networkResumeSeconds = 3;
+
+  static int backBufferFor(int forwardSize) {
+    final quarter = forwardSize ~/ 4;
+    return quarter < maximumBackBufferSize ? quarter : maximumBackBufferSize;
+  }
 
   final bool Function() _isLocalPlayback;
   final Player? Function() _currentPlayer;
@@ -31,8 +46,8 @@ class PlaybackCachePolicy {
         isMetered: MeteredNetworkService.isMetered,
         isLocalPlayback: _isLocalPlayback(),
       )
-          ? _lowMemoryBufferSize
-          : _defaultBufferSize;
+          ? lowMemoryBufferSize
+          : defaultBufferSize;
 
   void startWatching() {
     if (_settingsSubscription != null) {
@@ -61,9 +76,22 @@ class PlaybackCachePolicy {
         if (!identical(_currentPlayer(), player)) {
           return;
         }
-        final size = bufferSize.toString();
-        await pp.setProperty('demuxer-max-bytes', size);
-        await pp.setProperty('demuxer-max-back-bytes', size);
+        final forwardBytes = bufferSize;
+        await pp.setProperty('demuxer-max-bytes', forwardBytes.toString());
+        if (!identical(_currentPlayer(), player)) return;
+        await pp.setProperty(
+          'demuxer-max-back-bytes', backBufferFor(forwardBytes).toString());
+        if (!identical(_currentPlayer(), player)) return;
+        // Preserve local-file performance, apply a separate network policy.
+        if (!_isLocalPlayback()) {
+          await pp.setProperty(
+              'cache-secs', networkPrefetchSeconds.toString());
+          if (!identical(_currentPlayer(), player)) return;
+          // On an actual underrun, collect a few seconds before resuming to
+          // avoid rapid stop/start cycles. Do not delay initial startup.
+          await pp.setProperty(
+              'cache-pause-wait', networkResumeSeconds.toString());
+        }
       });
     } catch (e) {
       KazumiLogger().w(
