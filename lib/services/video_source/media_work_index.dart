@@ -50,7 +50,9 @@ class MediaWorkIndex {
     }
     // Drama-only lookup metadata is not an anime cover.
     if (mediaType == 2 && (work.sourcePlugin == '百科影视目录' ||
-        work.sourcePlugin == 'TVmaze节目目录')) return false;
+        work.sourcePlugin == 'TVmaze节目目录')) {
+      return false;
+    }
     return true;
   }
 
