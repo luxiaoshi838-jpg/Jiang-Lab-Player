@@ -14,7 +14,7 @@ import xml.etree.ElementTree as ET
 WORKS = ("亮剑", "知否知否应是绿肥红瘦")
 CMS = ("https://360zy.com/api.php/provide/vod",
        "https://api.wsyzy.net/api.php/provide/vod")
-PUBLIC = ("https://dmku.hls.one/", "https://api.danmu.icu/")
+PUBLIC = ("https://dmku.hls.one/", "https://fc.lyz05.cn/", "https://se.678.ooo/", "https://danmu.56uxi.com/", "https://dm.lxlad.com/", "https://api.danmu.icu/")
 OFFICIAL = ("v.qq.com", "www.iqiyi.com", "v.youku.com",
             "www.mgtv.com", "www.bilibili.com", "www.miguvideo.com")
 
