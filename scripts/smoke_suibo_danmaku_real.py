@@ -1,7 +1,8 @@
-"""End-to-end network diagnostics for drama episode comment availability.
+"""Real non-empty drama danmaku smoke, never pass when comments are zero.
 
-Prints results for real catalogue entries; 0 is NOT treated as success.
-Does not store video URL, comments, credentials or downloaded media.
+Primary search: public 360kan exact-title metadata -> verified official video
+episode link -> public URL-based danmaku library. No video downloading.
+CMS checks remain a fallback for direct public-slice links.
 """
 import json
 import re
@@ -10,101 +11,161 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 
-CMS = [
-    "https://360zy.com/api.php/provide/vod",
-    "https://api.wsyzy.net/api.php/provide/vod",
-]
-WORKS = ["亮剑", "知否知否应是绿肥红瘦"]
-DANMU = "https://api.danmu.icu/"
+WORKS = ("亮剑", "知否知否应是绿肥红瘦")
+CMS = ("https://360zy.com/api.php/provide/vod",
+       "https://api.wsyzy.net/api.php/provide/vod")
+PUBLIC = ("https://dmku.hls.one/", "https://api.danmu.icu/")
+OFFICIAL = ("v.qq.com", "www.iqiyi.com", "v.youku.com",
+            "www.mgtv.com", "www.bilibili.com", "www.miguvideo.com")
 
 
 def request(url, limit=3_000_000):
     req = urllib.request.Request(url, headers={
-        "User-Agent": "Suibo-2.3.13-Danmaku-Verification",
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126",
         "Accept": "application/json,text/xml,*/*",
     })
-    with urllib.request.urlopen(req, timeout=8) as response:
+    with urllib.request.urlopen(req, timeout=9) as response:
         data = response.read(limit + 1)
-        if len(data) > limit:
-            raise ValueError("response too large")
-        return data.decode("utf-8-sig", errors="replace")
+    if len(data) > limit:
+        raise ValueError("response too large")
+    return data.decode("utf-8-sig", errors="replace")
 
 
-def cms(endpoint, **query):
-    return json.loads(request(endpoint + "?" + urllib.parse.urlencode(query)))
+def decode(url, **query):
+    sep = "&" if "?" in url else "?"
+    return json.loads(request(url + sep + urllib.parse.urlencode(query)))
 
 
-def episode_url(work):
-    routes = str(work.get("vod_play_url", "")).split("$$$")
-    for route in routes:
-        for entry in route.split("#"):
-            url = entry.rsplit("$", 1)[-1].strip()
-            parsed = urllib.parse.urlparse(url)
-            if parsed.scheme != "https" or parsed.query or parsed.username:
-                continue
-            if parsed.path.lower().endswith((".m3u8", ".mp4", ".m4v")):
-                return url
-    return None
-
-
-def parse_count(raw):
+def count(raw):
     try:
-        tree = ET.fromstring(raw)
-        return len(tree.findall(".//d"))
+        root = ET.fromstring(raw)
+        return len(root.findall(".//d"))
     except ET.ParseError:
         try:
             obj = json.loads(raw)
             if isinstance(obj, dict):
                 rows = obj.get("danmuku") or obj.get("danmu") or obj.get("comments")
                 return len(rows) if isinstance(rows, list) else 0
-        except ValueError:
+        except (ValueError, TypeError):
             pass
     return 0
 
 
-def run():
-    missing = []
-    for title in WORKS:
-        found_video = False
-        found_comments = False
-        for provider in CMS:
+def clean_title(s):
+    return re.sub(r"[\\W_]+", "", s).lower()
+
+
+def safe_url(s, require_official=False):
+    p = urllib.parse.urlparse(str(s))
+    if p.scheme != "https" or not p.hostname or p.username or p.query:
+        return None
+    if require_official and p.hostname not in OFFICIAL:
+        return None
+    if not require_official and not p.path.lower().endswith((".m3u8", ".mp4", ".m4v")):
+        return None
+    return s
+
+
+def search_official(title):
+    data = decode("https://api.so.360kan.com/index",
+                  force_v=1, kw=title, pageno=1, v_ap=1, tab="all")
+    rows = data.get("data", {}).get("longData", {}).get("rows", [])
+    found = []
+    for row in rows if isinstance(rows, list) else []:
+        if clean_title(row.get("titleTxt", "")) != clean_title(title):
+            continue
+        sites = row.get("playlinks") or {}
+        if row.get("cat_name") == "电影":
+            for url in sites.values():
+                if safe_url(url, require_official=True):
+                    found.append(url)
+            continue
+        ep_list = row.get("seriesPlaylinks") or []
+        if isinstance(ep_list, list) and ep_list:
+            for entry in ep_list[:1]:
+                url = entry.get("url") if isinstance(entry, dict) else ""
+                if safe_url(url, require_official=True):
+                    found.append(url)
+        if found:
+            continue
+        cat = 2 if row.get("cat_name") == "电视剧" else 4
+        ent_id = row.get("en_id")
+        if not ent_id or not isinstance(sites, dict):
+            continue
+        for site in tuple(sites)[:3]:
+            payload = json.dumps([{"cat_id": str(cat), "ent_id": str(ent_id), "site": site}],
+                                 ensure_ascii=False, separators=(",", ":"))
             try:
-                result = cms(provider, ac="videolist", wd=title)
-                works = result.get("list", [])
-                work = next((entry for entry in works if isinstance(entry, dict)
-                    and (title in str(entry.get("vod_name", "")) or
-                         str(entry.get("vod_name", "")) in title)
-                    and entry.get("vod_id")), None)
-                if not work:
-                    continue
-                detail = cms(provider, ac="videolist", ids=work["vod_id"])
-                records = detail.get("list", [])
-                if not records:
-                    continue
-                found_video = True
-                video = episode_url(records[0])
-                if not video:
-                    print(title, "CMS video found; no safe public first-episode URL", flush=True)
-                    continue
-                req_url = DANMU + "?" + urllib.parse.urlencode(
-                    {"ac": "dm", "url": video})
-                count = parse_count(request(req_url))
-                print(title, "public danmu.icu count:", count, flush=True)
-                if count:
-                    found_comments = True
-                    break
+                result = decode("https://api.so.360kan.com/episodesv2",
+                                v_ap=1, s=payload)
+                blocks = result.get("data") or []
+                html = blocks[0].get("seriesHTML", {}) if blocks else {}
+                episodes = html.get("seriesPlaylinks") or html.get("series_playlinks") or []
+                if episodes:
+                    first = episodes[0]
+                    url = first.get("url") if isinstance(first, dict) else first
+                    if safe_url(url, require_official=True):
+                        found.append(url)
             except Exception as exc:
-                print(title, "provider/API error:", type(exc).__name__,
-                      str(exc)[:120], flush=True)
-        print(title, "CMS_MATCH=", found_video,
-              "ACTUAL_DANMAKU=", found_comments, flush=True)
-        if not found_comments:
-            missing.append(title)
-    if missing:
-        print("FAIL: no actual danmaku for:", ", ".join(missing), flush=True)
-        return 1
-    return 0
+                print(title, site, "detail error:", type(exc).__name__, flush=True)
+    print(title, "OFFICIAL_URLS=", len(found), flush=True)
+    return list(dict.fromkeys(found))[:3]
+
+
+def search_cms(title):
+    found = []
+    for provider in CMS:
+        try:
+            rows = decode(provider, ac="videolist", wd=title).get("list", [])
+            item = next((x for x in rows if isinstance(x, dict) and
+                         clean_title(x.get("vod_name", "")) == clean_title(title) and
+                         x.get("vod_id")), None)
+            if not item:
+                continue
+            details = decode(provider, ac="videolist", ids=item["vod_id"]).get("list") or []
+            for road in str(details[0].get("vod_play_url", "")).split("$$$") if details else []:
+                for episode in road.split("#")[:1]:
+                    url = episode.rsplit("$", 1)[-1].strip()
+                    if safe_url(url):
+                        found.append(url)
+        except Exception as exc:
+            print(title, "CMS error:", type(exc).__name__, flush=True)
+    return list(dict.fromkeys(found))[:2]
+
+
+def check(title):
+    urls = []
+    try:
+        urls.extend(search_official(title))
+    except Exception as exc:
+        print(title, "360 lookup:", type(exc).__name__, flush=True)
+    urls.extend(search_cms(title))
+    for page in urls[:5]:
+        for server in PUBLIC:
+            try:
+                comments = count(request(server + "?" + urllib.parse.urlencode({
+                    "ac": "dm", "url": page})))
+                print(title, "source:", urllib.parse.urlparse(server).hostname,
+                      "count:", comments, flush=True)
+                if comments > 0:
+                    return True
+            except Exception as exc:
+                print(title, "public source unavailable:",
+                      type(exc).__name__, flush=True)
+    return False
+
+
+def main():
+    failed = []
+    for title in WORKS:
+        has_comments = check(title)
+        print(title, "ACTUAL_DANMAKU=", has_comments, flush=True)
+        if not has_comments:
+            failed.append(title)
+    if failed:
+        print("FAIL: zero real danmaku:", ", ".join(failed), flush=True)
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
-    sys.exit(run())
+    sys.exit(main())
