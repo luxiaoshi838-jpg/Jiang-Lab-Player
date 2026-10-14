@@ -63,18 +63,8 @@ class DanmakuApi {
       }
     }
     if (DanmakuClient.hasCompatibleProvider) {
-      try {
-        final data = await _client.searchCompatibleTitles(title);
-        final result = DanmakuSearchResponse.fromJson(
-          data,
-          compatibleProvider: true,
-        );
-        if (result.animes.isNotEmpty) return result;
-        empty ??= result;
-      } catch (error) {
-        lastFailure = error;
-      }
-      // Some compatible deployments only enable the episodes route.
+      // /search/episodes carries stable episode IDs in the same response.
+      // Keep those before falling back to the less detailed /search/anime.
       try {
         final data = await _client.get(
           url,
@@ -89,6 +79,17 @@ class DanmakuApi {
         empty ??= result;
       } catch (error) {
         lastFailure = error;
+      }
+      try {
+        final data = await _client.searchCompatibleTitles(title);
+        final result = DanmakuSearchResponse.fromJson(
+          data,
+          compatibleProvider: true,
+        );
+        if (result.animes.isNotEmpty) return result;
+        empty ??= result;
+      } catch (error) {
+        lastFailure ??= error;
       }
     }
     if (empty != null) return empty;
