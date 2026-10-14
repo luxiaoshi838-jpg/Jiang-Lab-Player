@@ -50,7 +50,9 @@ class ManualDanmakuLinkStore {
 
   static RememberedDanmakuEpisode? lookupWithSource(int workId, int episode) {
     if (workId <= 0 || episode <= 0 ||
-        GStorage.getSetting(SettingsKeys.privateMode)) return null;
+        GStorage.getSetting(SettingsKeys.privateMode)) {
+      return null;
+    }
     for (final record in GStorage.getStringListSettingByName(sourceKeyFor(workId))) {
       final fields = record.split(':');
       if (fields.length != 3 || int.tryParse(fields[0]) != episode) continue;
@@ -73,7 +75,9 @@ class ManualDanmakuLinkStore {
     required bool compatibleProvider,
   }) async {
     if (workId <= 0 || episode <= 0 || episodeId <= 0 ||
-        GStorage.getSetting(SettingsKeys.privateMode)) return;
+        GStorage.getSetting(SettingsKeys.privateMode)) {
+      return;
+    }
     final existing = GStorage.getStringListSettingByName(sourceKeyFor(workId));
     final updated = existing.where(
       (line) => int.tryParse(line.split(':').first) != episode,
