@@ -175,11 +175,10 @@ abstract class _SearchPageController with Store {
   }
 
   Future<void> _appendRuleResults(String keyword, int generation) async {
-    final confirmedDrama = bangumiList.any((item) =>
-        isConfirmedDramaCatalogue(item.type, item.sourcePlugin));
+    // Kazumi anime and Suibo VOD providers are equal default search sources.
+    // Do not hide anime rules based on a metadata catalog's medium.
     final rules = _pluginsController.pluginList
-        .where((rule) => !isLiveOnlyRule(rule.type) &&
-            (!confirmedDrama || isRelevantRuleTypeForDrama(rule.type)))
+        .where((rule) => !isLiveOnlyRule(rule.type))
         .toList(growable: false);
     // Never deduplicate by title before retaining its rule URL: separate
     // providers can legitimately serve the same work.
