@@ -98,7 +98,7 @@ def first_episodes(base, anime_id, official):
         label = str(row.get("episodeTitle", "")).strip()
         ordinal = str(row.get("episodeNumber", "")).strip()
         matched = (
-            re.search(r"第\\s*0*1\\s*[集话期]", label)
+            re.search(r"第\s*0*1\s*[集话期]", label)
             or re.search(r"(?:^|[_ .-])0*1$", label)
             or re.search(r"(?:^|[_ .-])(?:ep|e)0*1(?:$|[_ .-])", label, re.I)
             or (ordinal.lstrip("0") == "1")
