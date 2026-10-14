@@ -31,7 +31,9 @@ void main() {
         reason: 'Each bundled rule must have a search strategy: ${rule.name}',
       );
       expect(rule.baseUrl, startsWith('https://'));
-      expect(rule.chapterRoads, isNotEmpty);
+      expect(rule.chapterRoads.isNotEmpty ||
+          rule.chapterApiConfig.request.url.isNotEmpty, isTrue,
+          reason: 'Every bundled rule needs a chapter strategy: ${rule.name}');
     }
     expect(rules.any((p) => p.name == 'PeerTube公开点播'), isTrue);
   });
