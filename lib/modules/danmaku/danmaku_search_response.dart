@@ -1,3 +1,5 @@
+import 'package:kazumi/modules/danmaku/danmaku_episode_response.dart';
+
 /// Search results from official DanDanPlay or a configured compatible API.
 /// IDs belong to the service which returned them and are not interchangeable.
 class DanmakuSearchAnime {
@@ -5,12 +7,16 @@ class DanmakuSearchAnime {
   final String animeTitle;
   final String typeDescription;
   final bool compatibleProvider;
+  /// Episode identities returned by /search/episodes. Do not discard them
+  /// and then require an unrelated second catalog request.
+  final List<DanmakuEpisode> episodes;
 
   const DanmakuSearchAnime({
     required this.animeId,
     required this.animeTitle,
     required this.typeDescription,
     this.compatibleProvider = false,
+    this.episodes = const [],
   });
 
   static DanmakuSearchAnime? parse(
@@ -21,11 +27,26 @@ class DanmakuSearchAnime {
     final id = int.tryParse('${raw['animeId'] ?? ''}');
     final title = (raw['animeTitle'] ?? '').toString().trim();
     if (id == null || id <= 0 || title.isEmpty) return null;
+    final episodeRows = raw['episodes'];
+    final parsedEpisodes = <DanmakuEpisode>[];
+    if (episodeRows is List) {
+      for (final row in episodeRows) {
+        if (row is! Map) continue;
+        try {
+          parsedEpisodes.add(
+            DanmakuEpisode.fromJson(Map<String, dynamic>.from(row)),
+          );
+        } on FormatException {
+          // Keep usable episodes even when a source sends one invalid row.
+        }
+      }
+    }
     return DanmakuSearchAnime(
       animeId: id,
       animeTitle: title,
       typeDescription: (raw['typeDescription'] ?? '').toString(),
       compatibleProvider: compatibleProvider,
+      episodes: parsedEpisodes,
     );
   }
 
