@@ -104,29 +104,36 @@ class MediaDanmakuService {
         break;
       }
       try {
-        final candidates = await DanmakuApi.searchAnimes(query.trim());
-        final chosen = selectAnime(candidates, query);
-        if (chosen == null) continue;
-        final episodeList = chosen.episodes.isNotEmpty
-            ? chosen.episodes
-            : (await DanmakuApi.getDanDanEpisodesByDanDanBangumiID(
-                chosen.animeId,
-                preferCompatible: chosen.compatibleProvider,
-                strictProvider: true,
-              )).episodes;
-        final episodeId = selectEpisodeId(
-          episodeList,
-          episode,
-          episodeTitle: episodeTitle,
-        );
-        if (episodeId == null) continue;
-        final comments = await DanmakuApi.getDanDanmakuByEpisodeID(
-          episodeId,
-          preferCompatible: chosen.compatibleProvider,
-          strictProvider: true,
-        );
-        if (comments.isNotEmpty) {
-          return MediaDanmakuMatch(comments, dandanId: chosen.animeId);
+        final response = await DanmakuApi.searchAnimes(query.trim());
+        for (final chosen in matchingSourceCandidates(response, query)) {
+          try {
+            final episodeList = chosen.episodes.isNotEmpty
+                ? chosen.episodes
+                : (await DanmakuApi.getDanDanEpisodesByDanDanBangumiID(
+                    chosen.animeId,
+                    preferCompatible: chosen.compatibleProvider,
+                    strictProvider: true,
+                  )).episodes;
+            final episodeId = selectEpisodeId(
+              episodeList,
+              episode,
+              episodeTitle: episodeTitle,
+            );
+            if (episodeId == null) continue;
+            final comments = await DanmakuApi.getDanDanmakuByEpisodeID(
+              episodeId,
+              preferCompatible: chosen.compatibleProvider,
+              strictProvider: true,
+            );
+            if (comments.isNotEmpty) {
+              return MediaDanmakuMatch(comments, dandanId: chosen.animeId);
+            }
+          } catch (sourceError) {
+            KazumiLogger().w(
+              'MediaDanmaku: one candidate source failed, try next',
+              error: sourceError,
+            );
+          }
         }
       } catch (error) {
         KazumiLogger().w(
@@ -497,31 +504,54 @@ class MediaDanmakuService {
     return aBase.isNotEmpty && aBase == bBase;
   }
 
-  /// Never silently select a truncated or ambiguously matched work.
-  static DanmakuSearchAnime? selectAnime(
-    DanmakuSearchResponse response,
-    String title,
-  ) {
-    if (response.hasMore) return null;
-    final unique = <int, DanmakuSearchAnime>{};
-    for (final candidate in response.animes) {
-      var matches = titlesMatch(title, candidate.animeTitle);
-      if (!matches && candidate.compatibleProvider) {
-        final label = candidate.animeTitle;
-        // A compatible backend may decorate a show with a year, category
-        // and platform. Only remove those suffixes; preserve actual titles.
-        if (label.contains('【') && label.contains('】from ')) {
-          var base = label.split('【').first.trim();
-          final years = RegExp(r'[（(](?:19|20)[0-9]{2}[)）]').allMatches(base).toList();
-          if (years.isNotEmpty && years.last.end == base.length) {
-            base = base.substring(0, years.last.start).trim();
-          }
-          matches = titlesMatch(title, base);
-        }
-      }
-      if (matches) unique[candidate.animeId] = candidate;
+  /// Strip only recognized compatible-provider metadata from a title.
+  /// "新亮剑" must never match "亮剑".
+  static String _candidateTitle(DanmakuSearchAnime candidate) {
+    final label = candidate.animeTitle;
+    if (!candidate.compatibleProvider ||
+        !label.contains('【') ||
+        !label.contains('】from ')) {
+      return label;
     }
-    return unique.length == 1 ? unique.values.single : null;
+    var base = label.split('【').first.trim();
+    final suffix = RegExp(r'[（(](?:19|20)[0-9]{2}[)）]').allMatches(base).toList();
+    if (suffix.isNotEmpty && suffix.last.end == base.length) {
+      base = base.substring(0, suffix.last.start).trim();
+    }
+    return base;
+  }
+
+  static String? _candidateYear(DanmakuSearchAnime candidate) {
+    final label = candidate.animeTitle.split('【').first;
+    final suffix = RegExp(r'[（(]((?:19|20)[0-9]{2})[)）]').firstMatch(label);
+    return suffix?.group(1);
+  }
+
+  /// Several identical works may exist on different comment platforms.
+  /// Reject conflicting release years, but try each verified source of the
+  /// same work until a real episode with nonempty comments is found.
+  static List<DanmakuSearchAnime> matchingSourceCandidates(
+      DanmakuSearchResponse response, String title) {
+    if (response.hasMore) return const [];
+    final selected = <String, DanmakuSearchAnime>{};
+    for (final item in response.animes) {
+      if (titlesMatch(title, _candidateTitle(item))) {
+        selected['${item.compatibleProvider}:${item.animeId}'] = item;
+      }
+    }
+    final candidates = selected.values.toList();
+    final years = candidates.map(_candidateYear).whereType<String>().toSet();
+    if (years.length > 1) return const [];
+    // No unbounded scraping; at most eight distinct providers are tried.
+    return candidates.take(8).toList();
+  }
+
+  /// Manual search still requires one unique work; multiple valid sources
+  /// remain visible for a human to choose.
+  static DanmakuSearchAnime? selectAnime(
+      DanmakuSearchResponse response, String title) {
+    final matches = matchingSourceCandidates(response, title);
+    return matches.length == 1 ? matches.single : null;
   }
 
   static String? _date(String title) {
