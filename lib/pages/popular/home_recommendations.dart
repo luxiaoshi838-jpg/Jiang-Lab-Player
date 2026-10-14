@@ -7,19 +7,75 @@ import 'package:kazumi/pages/popular/popular_controller.dart';
 import 'package:kazumi/utils/constants.dart';
 import 'package:kazumi/utils/device.dart';
 
-/// Five independently loaded media categories; no personalized guesses.
-class HomeRecommendations extends StatelessWidget {
+/// Five real media browse tabs; never an invented '猜你喜欢' feed.
+class HomeRecommendations extends StatefulWidget {
   const HomeRecommendations({super.key, required this.controller});
 
   final PopularController controller;
 
   @override
+  State<HomeRecommendations> createState() => _HomeRecommendationsState();
+}
+
+class _HomeRecommendationsState extends State<HomeRecommendations> {
+  HomeMediaCategory selected = HomeMediaCategory.anime;
+
+  @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final category in HomeMediaCategory.values)
-          _HomeSection(controller: controller, category: category),
+        SingleChildScrollView(
+          key: const ValueKey('suibo-five-category-tabs'),
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final category in HomeMediaCategory.values)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 5),
+                  child: TextButton(
+                    key: ValueKey('suibo-category-${category.name}'),
+                    onPressed: () {
+                      if (selected == category) return;
+                      setState(() => selected = category);
+                      if ((widget.controller.homeItems[category]?.isEmpty ?? true) &&
+                          widget.controller.homeLoading[category] != true) {
+                        widget.controller.refreshHomeSection(category);
+                      }
+                    },
+                    style: TextButton.styleFrom(
+                      foregroundColor: selected == category
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(category.label),
+                        const SizedBox(height: 3),
+                        Container(
+                          height: 2,
+                          width: 24,
+                          decoration: BoxDecoration(
+                            color: selected == category
+                                ? theme.colorScheme.primary
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        _HomeSection(
+          key: ValueKey(selected),
+          controller: widget.controller,
+          category: selected,
+        ),
       ],
     );
   }
