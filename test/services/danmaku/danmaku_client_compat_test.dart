@@ -12,6 +12,27 @@ void main() {
     expect(fallback.queryParameters['anime'], '亮剑');
   });
 
+  test('compatible work-name search uses a separate supported path', () {
+    final endpoint = Uri.parse(
+      'https://api.dandanplay.net/api/v2/search/anime?keyword=亮剑');
+    final uri = DanmakuClient.compatibleUri(
+      endpoint, 'https://comments.example.com/user-token');
+    expect(uri?.path, '/user-token/api/v2/search/anime');
+    expect(uri?.queryParameters['keyword'], '亮剑');
+  });
+
+  test('no official key or compatible host must not attempt unsigned search', () async {
+    if (DanmakuClient.hasOfficialCredentials ||
+        DanmakuClient.hasCompatibleProvider) {
+      return;
+    }
+    await expectLater(
+      DanmakuClient.instance.get(
+        'https://api.dandanplay.net/api/v2/search/episodes'),
+      throwsA(isA<DanmakuProviderUnavailable>()),
+    );
+  });
+
   test('never send a DanDanPlay signature to unsupported or private hosts', () {
     final official = Uri.parse('https://api.dandanplay.net/api/v2/comment/19');
     expect(DanmakuClient.compatibleUri(official, 'https://api.danmu.icu'), isNull);
