@@ -547,12 +547,15 @@ abstract class _VideoPageController with Store implements Disposable {
 
   Future<DanmakuLoadResult?> _rememberedDanmaku(
       PlaybackInitParams params) async {
-    final linkedId = ManualDanmakuLinkStore.lookup(
+    final remembered = ManualDanmakuLinkStore.lookupWithSource(
       params.bangumiId, params.danmakuEpisodeNumber,
     );
-    if (linkedId == null) return null;
+    if (remembered == null) return null;
     try {
-      final entries = await DanmakuApi.getDanDanmakuByEpisodeID(linkedId);
+      final entries = await DanmakuApi.getDanDanmakuByEpisodeID(
+        remembered.episodeId,
+        preferCompatible: remembered.compatibleProvider,
+      );
       if (entries.isEmpty) return null;
       return DanmakuLoadResult.success(danmakus: entries, bangumiID: 0);
     } catch (error) {
