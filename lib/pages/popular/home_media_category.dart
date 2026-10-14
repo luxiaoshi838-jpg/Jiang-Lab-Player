@@ -7,7 +7,8 @@ enum HomeMediaCategory {
   anime('番剧', 2, <String>[]),
   movie('电影', 6, <String>['电影']),
   series('电视剧', 6, <String>['电视剧', '国产剧', '连续剧']),
-  shortDrama('短剧', 6, <String>['短剧', '微短剧', '网络短剧']);
+  shortDrama('短剧', 6, <String>['短剧', '微短剧', '网络短剧']),
+  variety('综艺', 6, <String>['综艺', '真人秀', '娱乐节目']);
 
   const HomeMediaCategory(this.label, this.subjectType, this.genreTags);
 
@@ -34,6 +35,10 @@ enum HomeMediaCategory {
         HomeMediaCategory.shortDrama => const [
             '剧情', '搞笑', '都市', '爱情', '甜宠', '逆袭', '悬疑',
             '古装', '家庭', '穿越', '重生', '奇幻', '喜剧',
+          ],
+        HomeMediaCategory.variety => const [
+            '真人秀', '音乐', '脱口秀', '竞技', '访谈', '旅行', '美食',
+            '文化', '生活', '喜剧', '游戏',
           ],
       };
 
