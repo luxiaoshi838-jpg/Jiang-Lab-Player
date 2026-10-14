@@ -25,7 +25,11 @@ void main() {
     expect(anime.length, names.length);
     expect(anime.map((p) => p.name).toSet(), names);
     for (final rule in anime) {
-      expect(rule.searchURL, contains('@keyword'));
+      expect(
+        rule.usesApiSearch || rule.searchURL.contains('@keyword'),
+        isTrue,
+        reason: 'Each bundled rule must have a search strategy: ${rule.name}',
+      );
       expect(rule.baseUrl, startsWith('https://'));
       expect(rule.chapterRoads, isNotEmpty);
     }
