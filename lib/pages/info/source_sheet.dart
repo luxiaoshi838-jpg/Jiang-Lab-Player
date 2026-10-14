@@ -58,16 +58,11 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
 
   List<Plugin> get _eligiblePlugins =>
       _pluginsController.pluginList
-          .where((p) => !isLiveOnlyRule(p.type) &&
-              (!_isDrama || _includeAnimeRules ||
-                  isRelevantRuleTypeForDrama(p.type)))
+          .where((p) => !isLiveOnlyRule(p.type))
           .toList(growable: false);
 
-  int get _hiddenAnimeCount => !_isDrama || _includeAnimeRules
-      ? 0
-      : _pluginsController.pluginList
-          .where((p) => p.type.trim().toLowerCase() == 'anime')
-          .length;
+  // All regular playback rules already participate in automatic search.
+  int get _hiddenAnimeCount => 0;
 
   void _showAndSearchAnimeRules() {
     if (_includeAnimeRules || !mounted) return;
