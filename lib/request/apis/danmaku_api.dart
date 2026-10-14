@@ -23,12 +23,14 @@ class DanmakuApi {
   static Future<DanmakuEpisodeResponse> getDanDanEpisodesByDanDanBangumiID(
     int bangumiID, {
     bool preferCompatible = false,
+    bool strictProvider = false,
   }) async {
     final path = ApiEndpoints.dandanAPIInfo + bangumiID.toString();
     final endPoint = ApiEndpoints.dandanAPIDomain + path;
     final jsonData = await _client.get(
       endPoint,
       preferCompatible: preferCompatible,
+      officialOnly: strictProvider && !preferCompatible,
     );
     return DanmakuEpisodeResponse.fromJson(jsonData);
   }
@@ -107,14 +109,17 @@ class DanmakuApi {
   static Future<List<DanmakuEntry>> getDanDanmakuByEpisodeID(
     int episodeID, {
     bool preferCompatible = false,
+    bool strictProvider = false,
   }) => _getComments(
     episodeID.toString(),
     preferCompatible: preferCompatible,
+    strictProvider: strictProvider,
   );
 
   static Future<List<DanmakuEntry>> _getComments(
     String episodeID, {
     bool preferCompatible = false,
+    bool strictProvider = false,
   }) async {
     final endPoint =
         '${ApiEndpoints.dandanAPIDomain}${ApiEndpoints.dandanAPIComment}$episodeID';
@@ -129,6 +134,7 @@ class DanmakuApi {
         'chConvert': conversion.value.toString(),
       },
       preferCompatible: preferCompatible,
+      officialOnly: strictProvider && !preferCompatible,
     );
     final List<dynamic> comments = jsonData['comments'];
     return [for (final comment in comments) DanmakuEntry.fromJson(comment)];
