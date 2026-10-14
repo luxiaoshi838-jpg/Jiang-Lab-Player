@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kazumi/request/clients/danmaku_client.dart';
+import 'package:kazumi/modules/danmaku/danmaku_search_response.dart';
 
 void main() {
   test('danmu_api request keeps its token prefix and official request path', () {
@@ -30,6 +31,38 @@ void main() {
       DanmakuClient.instance.get(
         'https://api.dandanplay.net/api/v2/search/episodes'),
       throwsA(isA<DanmakuProviderUnavailable>()),
+    );
+  });
+
+  test('manual title search tags compatible IDs to prevent cross-provider fetch', () {
+    final data = <String, dynamic>{
+      'success': true,
+      'animes': [
+        {
+          'animeId': '8321001',
+          'animeTitle': '亮剑(2005)【电视剧】from 360',
+          'typeDescription': '电视剧',
+        },
+        {'animeId': 0, 'animeTitle': ''},
+      ],
+    };
+    final compatible = DanmakuSearchResponse.fromJson(
+      data, compatibleProvider: true,
+    );
+    final official = DanmakuSearchResponse.fromJson(data);
+    expect(compatible.animes, hasLength(1));
+    expect(compatible.animes.single.compatibleProvider, isTrue);
+    expect(official.animes.single.compatibleProvider, isFalse);
+  });
+
+  test('malformed and explicitly rejected provider data is not a valid empty result', () {
+    expect(
+      () => DanmakuSearchResponse.fromJson(<String, dynamic>{'success': false, 'animes': []}),
+      throwsFormatException,
+    );
+    expect(
+      () => DanmakuSearchResponse.fromJson(<String, dynamic>{'success': true}),
+      throwsFormatException,
     );
   });
 
