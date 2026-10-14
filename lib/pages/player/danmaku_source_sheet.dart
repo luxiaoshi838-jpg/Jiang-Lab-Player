@@ -17,6 +17,7 @@ import 'package:kazumi/modules/danmaku/danmaku_episode_response.dart';
 import 'package:kazumi/modules/danmaku/danmaku_search_response.dart';
 import 'package:kazumi/pages/player/controller/player_danmaku_controller.dart';
 import 'package:kazumi/request/apis/danmaku_api.dart';
+import 'package:kazumi/request/clients/danmaku_client.dart';
 import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/services/storage/storage.dart';
 import 'package:kazumi/services/danmaku/manual_danmaku_link_store.dart';
@@ -175,12 +176,19 @@ class _DanmakuSourceSheetState extends State<_DanmakuSourceSheet> {
         _hasMore = response.hasMore;
         if (response.animes.isEmpty) _error = '未找到作品';
       });
+    } on DanmakuProviderUnavailable {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = '弹幕服务未连接：当前版本缺少有效的弹幕检索接口，'
+            '不是作品没有弹幕。请使用接入正式服务的安装版本。';
+      });
     } catch (error) {
       KazumiLogger().w('Danmaku source search failed', error: error);
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = '搜索失败';
+        _error = '弹幕服务请求失败，请检查连接后重试';
       });
     }
   }
