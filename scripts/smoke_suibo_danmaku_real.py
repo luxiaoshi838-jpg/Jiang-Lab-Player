@@ -140,7 +140,33 @@ def search_cms(title):
     return list(dict.fromkeys(found))[:2]
 
 
+def check_public_compat(title):
+    """Probe the Dandan-compatible public endpoint used by iPlay on GitHub."""
+    base = "https://api.ourfor.top"
+    try:
+        data = decode(base + "/api/v2/search/episodes", anime=title)
+        animes = data.get("animes") or []
+        exact = [a for a in animes if clean_title(a.get("animeTitle", "")) == clean_title(title)]
+        print(title, "OURFOR_TITLES=", len(animes), "EXACT=", len(exact), flush=True)
+        if len(exact) != 1:
+            return False
+        first = [e for e in exact[0].get("episodes", [])
+                 if re.search(r"^(?:第\\s*0*1\\s*[集话期]|0*1$)", str(e.get("episodeTitle", "")))]
+        if len(first) != 1 or not first[0].get("episodeId"):
+            return False
+        data = decode(base + "/api/v2/comment/" + str(first[0]["episodeId"]))
+        comments = data.get("comments")
+        n = len(comments) if isinstance(comments, list) else 0
+        print(title, "OURFOR_REAL_COMMENT_ROWS=", n, flush=True)
+        return n > 0
+    except Exception as exc:
+        print(title, "OURFOR_ERROR=", type(exc).__name__, flush=True)
+        return False
+
+
 def check(title):
+    if check_public_compat(title):
+        return True
     urls = []
     try:
         urls.extend(search_official(title))
