@@ -32,8 +32,8 @@ def fetch(path, query=None):
     return doc
 
 def clean_title(value):
-    value = re.sub(r"\\((?:19|20)[0-9]{2}\\)|（(?:19|20)[0-9]{2}）", "", value.split("【")[0])
-    return re.sub(r"[^\\w\\u4e00-\\u9fff]", "", value).lower()
+    value = re.sub(r"\((?:19|20)[0-9]{2}\)|（(?:19|20)[0-9]{2}）", "", value.split("【")[0])
+    return re.sub(r"[^\w\u4e00-\u9fff]", "", value).lower()
 
 def main():
     # The Node runner may need a brief startup period, not network search.
@@ -61,7 +61,7 @@ def main():
                 detail = fetch("/api/v2/bangumi/" + urllib.parse.quote(str(anime_id), safe=""))
                 episodes = detail.get("bangumi", {}).get("episodes", [])
                 eps = [x for x in episodes if isinstance(x, dict) and
-                       re.search(r"^(?:第\\s*0*1\\s*[集话期]|0*1$|(?:ep|e)0*1$)",
+                       re.search(r"^(?:第\s*0*1\s*[集话期]|0*1$|(?:ep|e)0*1$)",
                                  str(x.get("episodeTitle", "")).strip(), re.I)]
                 if not eps and len(episodes) == 1:
                     eps = episodes
