@@ -72,6 +72,9 @@ class InfoEpisodeSectionState extends State<InfoEpisodeSection> {
       .toLowerCase()
       .replaceAll(RegExp(r'[\s·:：/\\\-_.？！!?（）()\[\]【】]'), '');
 
+  static String keywordFrom(BangumiItem item) =>
+      item.nameCn.isEmpty ? item.name : item.nameCn;
+
   static bool _sameWork(String candidate, BangumiItem item) {
     final value = _normalized(candidate);
     if (value.isEmpty) return false;
@@ -160,6 +163,21 @@ class InfoEpisodeSectionState extends State<InfoEpisodeSection> {
       final plugin = _findPlugin(pluginName);
       if (plugin == null) return false;
       return _trySource(plugin, title, url, generation);
+    }
+
+    // Previously used source wins over installation order when still valid.
+    // History retains the original rule URL without changing the Hive schema.
+    final previousSources = _history.histories
+        .where((history) =>
+            history.bangumiItem.id == item.id &&
+            history.entryKind == 'online' &&
+            history.lastSrc.trim().isNotEmpty)
+        .toList()
+      ..sort((a, b) => b.lastWatchTime.compareTo(a.lastWatchTime));
+    for (final history in previousSources) {
+      if (!mounted || generation != _generation) return;
+      if (await trySaved(history.adapterName, keywordFrom(item),
+          history.lastSrc)) return;
     }
 
     if (item.isExternal &&
