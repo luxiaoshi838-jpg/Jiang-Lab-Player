@@ -107,15 +107,8 @@ abstract class _PopularController with Store {
               installedSources: inject<PluginsController>().pluginList,
               count: HomeMediaCategory.visibleCount,
             );
-      // Metadata-only Bangumi is secondary: CMS category lists provide
-      // actual playable source identities and posters for live-action works.
-      if (entries.isEmpty && category != HomeMediaCategory.anime) {
-        entries = await BangumiApi.getHomeRecommendations(
-          category: category,
-          subcategory: subcategory,
-          count: HomeMediaCategory.visibleCount,
-        );
-      }
+      // Do not backfill film/TV/variety categories from metadata-only
+      // Bangumi entries. Empty playable catalogues must be labelled empty.
       // Preserve the original anime popularity feed ONLY for its default
       // unfiltered category. Other genres cannot borrow unrelated items.
       if (entries.isEmpty &&
