@@ -53,6 +53,12 @@ void main() {
       }
     });
 
+    test('variety genres have an independent valid catalogue scope', () {
+      expect(HomeMediaCategory.values.length, 5);
+      expect(HomeMediaCategory.variety.genreTags, contains('综艺'));
+      expect(HomeMediaCategory.variety.subcategories, contains('真人秀'));
+    });
+
     test('each section has its own distinct default query', () {
       final signatures = <String>{};
       for (final category in HomeMediaCategory.values) {
@@ -87,10 +93,10 @@ void main() {
       );
     });
 
-    test('all four sections retain the twelve-item grid contract', () {
+    test('five sections retain the twelve-item grid contract', () {
       expect(HomeMediaCategory.visibleCount, 12);
       expect(HomeMediaCategory.values.map((x) => x.popularTitle).toList(),
-          ['热门番剧', '热门电影', '热门电视剧', '热门短剧']);
+          ['热门番剧', '热门电影', '热门电视剧', '热门短剧', '热门综艺']);
     });
   });
 }
