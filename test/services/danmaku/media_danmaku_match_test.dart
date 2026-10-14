@@ -173,6 +173,18 @@ void main() {
         'https://v.qq.com/x/cover/abc/episode2.html');
     expect(MediaDanmakuService.officialEpisodePage(item, 3), isNull);
     item['seriesPlaylinks'] = [
+      {'url': 'http://www.iqiyi.com/v_19rrj5sgww.html'},
+    ];
+    expect(MediaDanmakuService.officialEpisodePage(item, 1),
+        'https://www.iqiyi.com/v_19rrj5sgww.html');
+    item['seriesPlaylinks'] = [
+      {'url': 'https://v.youku.com/video?vid=XNjQ4MTIwOTE2NA==&tpa=example'},
+    ];
+    expect(MediaDanmakuService.officialEpisodePage(item, 1),
+        'https://v.youku.com/v_show/id_XNjQ4MTIwOTE2NA==.html');
+    expect(MediaDanmakuService.normalizeOfficialDanmakuPage(
+      'https://v.youku.com/video?vid=ok&token=private'), isNull);
+    item['seriesPlaylinks'] = [
       {'url': 'https://cdn.example.com/1.m3u8'},
     ];
     expect(MediaDanmakuService.officialEpisodePage(item, 1), isNull);

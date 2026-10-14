@@ -57,11 +57,22 @@ def clean_title(s):
 
 def safe_url(s, require_official=False):
     p = urllib.parse.urlparse(str(s))
-    if p.scheme != "https" or not p.hostname or p.username or p.query:
+    if p.scheme not in ("http", "https") or not p.hostname or p.username:
         return None
-    if require_official and p.hostname not in OFFICIAL:
+    query = urllib.parse.parse_qs(p.query)
+    if any(k.lower() in {"token", "auth", "key", "signature", "sign",
+                         "password", "access_token", "secret"} for k in query):
         return None
-    if not require_official and not p.path.lower().endswith((".m3u8", ".mp4", ".m4v")):
+    if require_official:
+        if p.hostname not in OFFICIAL:
+            return None
+        if p.hostname == "v.youku.com" and p.path == "/video":
+            vid = query.get("vid", [""])[0]
+            if not re.fullmatch(r"[A-Za-z0-9_=-]{1,100}", vid):
+                return None
+            return f"https://v.youku.com/v_show/id_{vid}.html"
+        return p._replace(scheme="https").geturl()
+    if p.scheme != "https" or p.query or not p.path.lower().endswith((".m3u8", ".mp4", ".m4v")):
         return None
     return s
 
@@ -97,14 +108,14 @@ def search_official(title):
         if row.get("cat_name") == "电影":
             for url in sites.values():
                 if safe_url(url, require_official=True):
-                    found.append(url)
+                    found.append(safe_url(url, require_official=True))
             continue
         ep_list = row.get("seriesPlaylinks") or []
         if isinstance(ep_list, list) and ep_list:
             for entry in ep_list[:1]:
                 url = entry.get("url") if isinstance(entry, dict) else ""
                 if safe_url(url, require_official=True):
-                    found.append(url)
+                    found.append(safe_url(url, require_official=True))
         if found:
             continue
         cat = 2 if row.get("cat_name") == "电视剧" else 4
@@ -124,7 +135,7 @@ def search_official(title):
                     first = episodes[0]
                     url = first.get("url") if isinstance(first, dict) else first
                     if safe_url(url, require_official=True):
-                        found.append(url)
+                        found.append(safe_url(url, require_official=True))
             except Exception as exc:
                 print(title, site, "detail error:", type(exc).__name__, flush=True)
     print(title, "OFFICIAL_URLS=", len(found), flush=True)
