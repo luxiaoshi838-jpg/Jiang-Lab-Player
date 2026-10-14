@@ -135,6 +135,34 @@ void main() {
     expect(comments.single.message, '弹幕');
   });
 
+  test('danmu_api automatic match checks exact work and episode', () {
+    final matched = {
+      'isMatched': true,
+      'matches': [
+        {
+          'animeTitle': '亮剑',
+          'episodeTitle': '第1集',
+          'episodeId': 8301,
+        }
+      ],
+    };
+    expect(MediaDanmakuService.selectCompatibleMatchId(matched, '亮剑', 1), 8301);
+    expect(MediaDanmakuService.selectCompatibleMatchId(matched, '亮剑', 2), isNull);
+    expect(MediaDanmakuService.selectCompatibleMatchId(matched, '新亮剑', 1), isNull);
+    expect(MediaDanmakuService.selectCompatibleMatchId({
+      'isMatched': true,
+      'matches': [matched['matches']![0], matched['matches']![0]],
+    }, '亮剑', 1), isNull);
+    expect(MediaDanmakuService.selectCompatibleMatchId(
+      {'isMatched': false, 'matches': matched['matches']}, '亮剑', 1,
+    ), isNull);
+    expect(MediaDanmakuService.selectCompatibleMatchId({
+      'isMatched': true,
+      'matches': [{'animeTitle': '亮剑', 'episodeTitle': '花絮',
+        'episodeId': 8301}],
+    }, '亮剑', 1), isNull);
+  });
+
   test('classic mainland dramas use explicit numeric episode labels', () {
     final episodes = [
       DanmakuEpisode(episodeId: 7701, episodeTitle: '01'),
