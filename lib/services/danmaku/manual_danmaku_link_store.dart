@@ -1,5 +1,11 @@
 import 'package:kazumi/services/storage/storage.dart';
 
+class RememberedDanmakuEpisode {
+  const RememberedDanmakuEpisode(this.episodeId, {this.compatibleProvider = false});
+  final int episodeId;
+  final bool compatibleProvider;
+}
+
 /// User-confirmed links between a non-anime work's episode and a DanDan
 /// episodeId. Stored locally; independent of the chosen video-source rule.
 /// The original Bangumi-anime automatic lookup remains unchanged.
@@ -38,6 +44,44 @@ class ManualDanmakuLinkStore {
     return decode(GStorage.getStringListSettingByName(keyFor(workId)))[episode];
   }
 
+  // V2 also records the source namespace: different services can assign
+  // the same numeric episode ID to unrelated videos.
+  static String sourceKeyFor(int workId) => 'vodDanmakuLinkV2_$workId';
+
+  static RememberedDanmakuEpisode? lookupWithSource(int workId, int episode) {
+    if (workId <= 0 || episode <= 0 ||
+        GStorage.getSetting(SettingsKeys.privateMode)) return null;
+    for (final record in GStorage.getStringListSettingByName(sourceKeyFor(workId))) {
+      final fields = record.split(':');
+      if (fields.length != 3 || int.tryParse(fields[0]) != episode) continue;
+      final id = int.tryParse(fields[1]);
+      if (id == null || id <= 0 || (fields[2] != 'c' && fields[2] != 'o')) {
+        continue;
+      }
+      return RememberedDanmakuEpisode(
+        id, compatibleProvider: fields[2] == 'c',
+      );
+    }
+    final legacy = decode(GStorage.getStringListSettingByName(keyFor(workId)))[episode];
+    return legacy == null ? null : RememberedDanmakuEpisode(legacy);
+  }
+
+  static Future<void> saveWithSource(
+    int workId,
+    int episode,
+    int episodeId, {
+    required bool compatibleProvider,
+  }) async {
+    if (workId <= 0 || episode <= 0 || episodeId <= 0 ||
+        GStorage.getSetting(SettingsKeys.privateMode)) return;
+    final existing = GStorage.getStringListSettingByName(sourceKeyFor(workId));
+    final updated = existing.where(
+      (line) => int.tryParse(line.split(':').first) != episode,
+    ).toList();
+    updated.add('$episode:$episodeId:${compatibleProvider ? 'c' : 'o'}');
+    await GStorage.putStringListSettingByName(sourceKeyFor(workId), updated);
+  }
+
   static Future<void> save(int workId, int episode, int episodeId) async {
     if (workId <= 0 || episode <= 0 || episodeId <= 0 ||
         GStorage.getSetting(SettingsKeys.privateMode)) {
@@ -58,5 +102,9 @@ class ManualDanmakuLinkStore {
         decode(GStorage.getStringListSettingByName(keyFor(workId)));
     links.remove(episode);
     await GStorage.putStringListSettingByName(keyFor(workId), encode(links));
+    final updated = GStorage.getStringListSettingByName(sourceKeyFor(workId))
+        .where((line) => int.tryParse(line.split(':').first) != episode)
+        .toList();
+    await GStorage.putStringListSettingByName(sourceKeyFor(workId), updated);
   }
 }
