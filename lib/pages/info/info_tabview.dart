@@ -489,7 +489,11 @@ class _InfoTabViewState extends State<InfoTabView> {
                   child: SafeArea(
                     top: false,
                     bottom: false,
-                    child: widget.isLoading ? infoBodyBone : infoBody,
+                    child: Column(
+                      children: [
+                        widget.isLoading ? infoBodyBone : infoBody,
+                      ],
+                    ),
                   ),
                 ),
               ],

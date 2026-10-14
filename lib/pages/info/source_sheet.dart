@@ -24,6 +24,8 @@ import 'package:kazumi/plugins/plugins_controller.dart';
 import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/services/video_source/video_source_failure.dart';
 import 'package:kazumi/services/video_source/direct_video_source.dart';
+import 'package:kazumi/services/video_source/video_catalog_scope.dart';
+import 'package:kazumi/services/video_source/official_video_search.dart';
 import 'package:kazumi/services/plugin/captcha_verification_service.dart';
 import 'package:kazumi/services/plugin/plugin_search_service.dart';
 import 'package:kazumi/services/plugin/rule_engine_models.dart'
@@ -36,9 +38,15 @@ part 'source_captcha_flow.dart';
 part 'source_sheet_view.dart';
 
 class SourceSheet extends StatefulWidget {
-  const SourceSheet({super.key, required this.infoController});
+  const SourceSheet({
+    super.key,
+    required this.infoController,
+    this.onSourceSelected,
+  });
 
   final InfoController infoController;
+  final void Function(Plugin plugin, String title, String src, List<Road> roads)?
+      onSourceSelected;
 
   @override
   State<SourceSheet> createState() => _SourceSheetState();
@@ -48,6 +56,35 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
   final CollectController _collectController = inject<CollectController>();
   final PluginsController _pluginsController = inject<PluginsController>();
   final Map<String, String> _sourceKeywords = {};
+  bool _includeAnimeRules = false;
+
+  List<Plugin> get _eligiblePlugins =>
+      _pluginsController.pluginList
+          .where((p) => !isLiveOnlyRule(p.type))
+          .toList(growable: false);
+
+  // All regular playback rules already participate in automatic search.
+  int get _hiddenAnimeCount => 0;
+
+  void _showAndSearchAnimeRules() {
+    if (_includeAnimeRules || !mounted) return;
+    setState(() => _includeAnimeRules = true);
+    // Preserve any confirmed VOD results and bookmarked direct URLs: do not
+    // clear/re-run the whole result list just to include legacy anime rules.
+    final legacy = _pluginsController.pluginList
+        .where((p) => p.type.trim().toLowerCase() == 'anime')
+        .toList(growable: false);
+    unawaited(_searchExtraAnimeRules(legacy));
+  }
+
+  Future<void> _searchExtraAnimeRules(List<Plugin> plugins) async {
+    for (var start = 0; start < plugins.length; start += 4) {
+      if (!mounted) return;
+      await Future.wait(plugins.skip(start).take(4).map(
+        (plugin) => _searchService.querySource(_keyword, plugin.name),
+      ));
+    }
+  }
 
   late final String _keyword;
   late final PluginSearchService _searchService;
@@ -66,7 +103,7 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
       onVerified: _showVerifiedResult,
       onCancelled: (plugin) => _retry(plugin.name),
     );
-    _searchService.queryAllSource(_keyword);
+    _searchService.queryAllSource(_keyword, selectedPlugins: _eligiblePlugins);
     // Preserve all rule URLs discovered during unified search. The live
     // source lookup may replace its response later; this snapshot remains
     // visible, deduplicated by URL in the source sheet.
@@ -125,6 +162,35 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
     );
   }
 
+  Future<void> _openVerifiedOfficialProgramme(Uri url) async {
+    try {
+      if (url.scheme == 'https' &&
+          url.host == 'www.iqiyi.com' &&
+          await launchUrl(url, mode: LaunchMode.externalApplication)) {
+        return;
+      }
+    } catch (error) {
+      KazumiLogger().w('SourceSheet: verified official programme open failed',
+          error: error);
+    }
+    if (mounted) {
+      KazumiDialog.showToast(message: '无法打开正版平台页面，请检查浏览器');
+    }
+  }
+
+  Future<void> _openOfficialPlatform(OfficialVideoPlatform platform) async {
+    final url = OfficialVideoSearch.searchUrl(platform, _keyword);
+    try {
+      if (await launchUrl(url, mode: LaunchMode.externalApplication)) return;
+    } catch (error) {
+      KazumiLogger().w('SourceSheet: official platform search failed',
+          error: error);
+    }
+    if (mounted) {
+      KazumiDialog.showToast(message: '无法打开平台网页，请检查浏览器');
+    }
+  }
+
   Future<void> _openInBrowser(String name) async {
     final plugin = _pluginFor(name);
     final targetUrl = plugin.usesApiSearch
@@ -169,16 +235,24 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
               ),
             );
       if (roads.isEmpty) throw ChapterErrorException(plugin.name);
-      task.withContext((context) => context.pushNamed(
-            '/video/',
-            arguments: OnlineVideoPlaybackArgs(
-              bangumiItem: widget.infoController.bangumiItem,
-              plugin: plugin,
-              title: searchItem.name,
-              src: searchItem.src,
-              roads: roads,
-            ),
-          ));
+      task.withContext((context) {
+        final onSelected = widget.onSourceSelected;
+        if (onSelected != null) {
+          Navigator.of(this.context).pop();
+          onSelected(plugin, searchItem.name, searchItem.src, roads);
+          return;
+        }
+        context.pushNamed(
+          '/video/',
+          arguments: OnlineVideoPlaybackArgs(
+            bangumiItem: widget.infoController.bangumiItem,
+            plugin: plugin,
+            title: searchItem.name,
+            src: searchItem.src,
+            roads: roads,
+          ),
+        );
+      });
     }, onError: (error, stackTrace) {
       KazumiLogger().w('SourceSheet: failed to query playlist', error: error);
       KazumiDialog.showToast(message: VideoSourceFailure.playlist(error));
@@ -217,12 +291,13 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
         builder: (context) {
           // Snapshot observable values here; lazy list builders are not tracked.
           final groupsByName = {
-            for (final plugin in _pluginsController.pluginList)
+            for (final plugin in _eligiblePlugins)
               plugin.name: _SourceSearchGroup(
                 name: plugin.name,
                 keyword: _keywordFor(plugin.name),
                 status: widget.infoController.pluginSearchStatus[plugin.name] ??
                     PluginSearchStatus.pending,
+                failureHint: widget.infoController.pluginSearchFailureHints[plugin.name],
                 results: <SearchItem>[],
               ),
           };
@@ -242,6 +317,8 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
           return _SourceSheetView(
             keyword: _keyword,
             groups: groupsByName.values.toList(),
+            hiddenAnimeCount: _hiddenAnimeCount,
+            onSearchAnimeRules: _showAndSearchAnimeRules,
             firstResultSource: firstResultSource,
             onSourceSearch: _showCustomKeyword,
             onSourceAliasSearch: _showAliasPicker,
@@ -249,6 +326,9 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
             onVerify: (name) =>
                 _captchaFlow.start(_pluginFor(name), _keywordFor(name)),
             onOpenBrowser: _openInBrowser,
+            onOpenOfficialPlatform: _openOfficialPlatform,
+            onOpenVerifiedOfficialProgramme: _openVerifiedOfficialProgramme,
+            programmeDate: widget.infoController.bangumiItem.airDate,
             onPlay: _openSearchItem,
             onClose: () => Navigator.of(context).pop(),
           );

@@ -74,12 +74,14 @@ class ApiSearchConfig {
   String listPath;
   String namePath;
   String sourcePath;
+  String imagePath;
 
   ApiSearchConfig({
     ApiRequestConfig? request,
     this.listPath = r'$.data[*]',
     this.namePath = r'$.name',
     this.sourcePath = r'$.url',
+    this.imagePath = '',
   }) : request = request ?? ApiRequestConfig();
 
   factory ApiSearchConfig.fromJson(Map<String, dynamic> json) {
@@ -88,6 +90,7 @@ class ApiSearchConfig {
       listPath: json['listPath'] as String? ?? r'$.data[*]',
       namePath: json['namePath'] as String? ?? r'$.name',
       sourcePath: json['sourcePath'] as String? ?? r'$.url',
+      imagePath: json['imagePath'] as String? ?? '',
     );
   }
 
@@ -96,6 +99,7 @@ class ApiSearchConfig {
         'listPath': listPath,
         'namePath': namePath,
         'sourcePath': sourcePath,
+        if (imagePath.isNotEmpty) 'imagePath': imagePath,
       };
 }
 

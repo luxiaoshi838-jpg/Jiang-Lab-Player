@@ -112,7 +112,7 @@ class _CollectPageState extends State<CollectPage> with KazumiDialogOwner {
         needTopOffset: false,
         toolbarHeight: 72,
         title: Text(
-          '追番',
+          '收藏',
           style: Theme.of(context)
               .textTheme
               .headlineSmall

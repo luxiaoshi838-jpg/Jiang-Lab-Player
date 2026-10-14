@@ -1,0 +1,84 @@
+name: Windows installable EXE validation
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+          cache: true
+      - name: Install Inno Setup 6 if absent
+        shell: pwsh
+        run: |
+          $path = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $path) -and -not (Get-Command "ISCC.exe" -ErrorAction SilentlyContinue)) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "Inno Setup installation failed" }
+          }
+      - name: Build a complete private installer (no public upload)
+        shell: pwsh
+        run: |
+          $destination = Join-Path $env:RUNNER_TEMP "SuiboInstallerValidation"
+          & ./scripts/build_windows_installer.ps1 -OutputDirectory $destination
+          if ($LASTEXITCODE -ne 0) { throw "Windows installer build failed" }
+      - name: Build a synthetic preceding installer to test version upgrade
+        shell: pwsh
+        run: |
+          $previousDir = Join-Path $env:RUNNER_TEMP "SuiboPreviousInstaller"
+          New-Item -ItemType Directory -Force -Path $previousDir | Out-Null
+          $iscc = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) "Inno Setup 6\ISCC.exe"
+          $releaseDir = Join-Path $PWD "build\windows\x64\runner\Release"
+          & $iscc "/DMyAppVersion=2.3.8" "/DFlutterReleaseDir=$releaseDir" "/DInstallerOutputDir=$previousDir" "installer\windows\Suibo.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Previous-version installer compile failed" }
+          if (-not (Test-Path (Join-Path $previousDir "Suibo-Setup-2.3.8-Windows-x64.exe"))) {
+            throw "Missing synthetic previous-version installer"
+          }
+      - name: Test silent previous-version to current-version overlay
+        shell: pwsh
+        run: |
+          $destination = Join-Path $env:RUNNER_TEMP "SuiboInstallerValidation"
+          $installer = @(Get-ChildItem $destination -Filter "Suibo-Setup-*-Windows-x64.exe")
+          if ($installer.Count -ne 1) { throw "Expected exactly one Windows installer" }
+          $installDir = Join-Path $env:RUNNER_TEMP "SuiboInstallerSmoke"
+          $previous = Join-Path $env:RUNNER_TEMP "SuiboPreviousInstaller\Suibo-Setup-2.3.8-Windows-x64.exe"
+          foreach ($attempt in 1..3) {
+            $package = if ($attempt -eq 1) { $previous } else { $installer[0].FullName }
+            $installLog = Join-Path $env:RUNNER_TEMP "SuiboInstall-Attempt-$attempt.log"
+            $arguments = @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=$installLog", "/DIR=$installDir")
+            $process = Start-Process -FilePath $package -ArgumentList $arguments -Wait -PassThru
+            if ($process.ExitCode -ne 0) {
+              Write-Host "Installer attempt $attempt exit code: $($process.ExitCode)"
+              if (Test-Path $installLog) {
+                Get-Content $installLog -Tail 65
+              }
+              throw "Silent install/overlay attempt $attempt failed"
+            }
+            foreach ($relative in @("suibo.exe", "flutter_windows.dll", "data\icudtl.dat")) {
+              if (-not (Test-Path (Join-Path $installDir $relative))) {
+                throw "Missing bundled dependency: $relative"
+              }
+            }
+            if (-not (Test-Path (Join-Path $installDir "data\flutter_assets"))) {
+              throw "Missing Flutter assets after install"
+            }
+          }
+          $uninstaller = Join-Path $installDir "unins000.exe"
+          if (Test-Path $uninstaller) {
+            $uninstallLog = Join-Path $env:RUNNER_TEMP "Suibo-Uninstall.log"
+            $process = Start-Process -FilePath $uninstaller -ArgumentList @(
+              "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=$uninstallLog"
+            ) -Wait -PassThru
+            if ($process.ExitCode -ne 0) {
+              Write-Host "Uninstaller exit code: $($process.ExitCode)"
+              if (Test-Path $uninstallLog) { Get-Content $uninstallLog -Tail 65 }
+              throw "Silent uninstall failed"
+            }
+          }
+      # DO NOT upload artifacts: this is a public source repository.

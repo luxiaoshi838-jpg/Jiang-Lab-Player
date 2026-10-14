@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
@@ -16,10 +17,12 @@ import 'package:kazumi/bean/widget/embedded_native_control_area.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
 import 'package:kazumi/pages/info/info_actions_menu.dart';
 import 'package:kazumi/pages/info/info_controller.dart';
+import 'package:kazumi/pages/info/info_episode_section.dart';
 import 'package:kazumi/pages/info/info_tabview.dart';
 import 'package:kazumi/pages/info/rating_review_dialog.dart';
 import 'package:kazumi/pages/info/source_sheet.dart';
 import 'package:kazumi/services/logging/logger.dart';
+import 'package:kazumi/services/video_source/bangumi_real_catalog.dart';
 import 'package:kazumi/services/platform/desktop_window_config.dart';
 import 'package:kazumi/services/storage/storage.dart';
 import 'package:kazumi/utils/device.dart';
@@ -51,6 +54,7 @@ class _InfoPageState extends State<InfoPage>
       Duration(milliseconds: 600);
 
   InfoController get infoController => widget.infoController;
+  final _episodeSectionKey = GlobalKey<InfoEpisodeSectionState>();
   late final TabController infoTabController;
   late final bool showRating;
 
@@ -238,6 +242,38 @@ class _InfoPageState extends State<InfoPage>
     infoTabController = TabController(length: _infoTabs.length, vsync: this);
     showRating = GStorage.getSetting(SettingsKeys.showRating);
     infoTabController.addListener(onInfoTabChanged);
+    if (infoController.bangumiItem.isExternal &&
+        (infoController.bangumiItem.sourcePlugin == '百科影视目录' ||
+         infoController.bangumiItem.sourcePlugin == 'TVmaze节目目录')) {
+      unawaited(_upgradeOldCatalogEntry());
+    }
+  }
+
+  /// Previously saved encyclopedia entries remain in Hive. On opening one,
+  /// recover real Bangumi TV metadata (including cover) when available.
+  Future<void> _upgradeOldCatalogEntry() async {
+    final old = infoController.bangumiItem;
+    final title = old.nameCn.isEmpty ? old.name : old.nameCn;
+    final actual = await BangumiRealCatalog.findExact(title);
+    if (!mounted || !identical(infoController.bangumiItem, old) ||
+        actual == null) {
+      return;
+    }
+    for (final source in old.discoveredSources) {
+      if (!actual.discoveredSources.any((x) => x.identity == source.identity)) {
+        actual.discoveredSources.add(source);
+      }
+    }
+    setState(() {
+      infoController.bangumiItem = actual;
+      commentsHasLoaded = false;
+      charactersIsEmpty = false;
+      staffIsEmpty = false;
+      infoController.relationsHasLoaded = false;
+    });
+    if (_needsBangumiInfoRefresh(actual)) {
+      unawaited(_loadBangumiInfo());
+    }
   }
 
   void onInfoTabChanged() {
@@ -328,12 +364,31 @@ class _InfoPageState extends State<InfoPage>
     }
   }
 
+  void _openOtherSources() {
+    showAdaptiveBottomSheet<void>(
+      context: context,
+      maxHeightFactor: 0.88,
+      builder: (context) => SourceSheet(
+        infoController: infoController,
+        onSourceSelected: (plugin, title, src, roads) {
+          _episodeSectionKey.currentState?.useSource(plugin, title, src, roads);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final showWindowButton = DesktopWindowConfig.showWindowButton;
     final topOffset = Platform.isMacOS && showWindowButton ? 22.0 : 0.0;
     return Scaffold(
-      body: NestedScrollView(
+      body: LayoutBuilder(builder: (context, constraints) {
+        final selectorHeight =
+            (constraints.maxHeight * 0.38).clamp(170.0, 310.0).toDouble();
+        return Column(
+          children: [
+            Expanded(
+              child: NestedScrollView(
         headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
           return <Widget>[
             SliverOverlapAbsorber(
@@ -363,6 +418,14 @@ class _InfoPageState extends State<InfoPage>
                   ),
                 ),
                 actions: [
+                  EmbeddedNativeControlArea(
+                    child: TextButton.icon(
+                      key: const ValueKey('suibo-other-sources'),
+                      onPressed: _openOtherSources,
+                      icon: const Icon(Icons.swap_horiz, size: 18),
+                      label: const Text('其他来源'),
+                    ),
+                  ),
                   if (innerBoxIsScrolled)
                     EmbeddedNativeControlArea(
                       child: CollectButton(
@@ -466,21 +529,23 @@ class _InfoPageState extends State<InfoPage>
             isLoading: showBangumiInfoSkeleton,
           );
         }),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        tooltip: '开始观看',
-        onPressed: () {
-          showAdaptiveBottomSheet<void>(
-            context: context,
-            maxHeightFactor: 0.88,
-            builder: (context) {
-              return SourceSheet(infoController: infoController);
-            },
-          );
-        },
-        label: const Text('开始观看'),
-        icon: const Icon(Icons.play_arrow_rounded),
-      ),
+              ),
+            ),
+            // Persistent bottom episode selector stays outside the five
+            // horizontally swipeable/independently scrollable detail tabs.
+            SafeArea(
+              top: false,
+              child: SizedBox(
+                height: selectorHeight,
+                child: Observer(builder: (context) => InfoEpisodeSection(
+                  key: _episodeSectionKey,
+                  infoController: infoController,
+                )),
+              ),
+            ),
+          ],
+        );
+      }),
     );
   }
 }

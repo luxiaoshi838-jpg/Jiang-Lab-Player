@@ -128,7 +128,19 @@ def checked_cert_hash(output: str, pattern: str) -> str:
     return value
 
 
-def build(keys: Path, output_dir: Path) -> Path:
+def parse_apk_identity(badging: str) -> tuple[str, int, str]:
+    """Parse aapt badging so upgrade checks use the actual APK manifest."""
+    package = re.search(
+        r"package:\s+name='([^']+)'\s+versionCode='(\d+)'\s+versionName='([^']+)'",
+        badging,
+    )
+    if not package:
+        raise RuntimeError("Cannot parse APK identity and version")
+    return package.group(1), int(package.group(2)), package.group(3)
+
+
+def build(keys: Path, output_dir: Path,
+          previous_apk: Path | None = None) -> Path:
     flutter = shutil.which("flutter")
     keytool = shutil.which("keytool")
     if not flutter or not keytool:
@@ -204,13 +216,35 @@ def build(keys: Path, output_dir: Path) -> Path:
                 raise RuntimeError("Signed APK certificate differs from private signing key")
             badging = run_safe([aapt, "dump", "badging", str(candidate)],
                                cwd=ROOT, environment=environment, redactions=secrets)
-            package = re.search(
-                r"package:\s+name='([^']+)'\s+versionCode='(\d+)'\s+versionName='([^']+)'",
-                badging,
-            )
-            if not package or package.group(1) != EXPECTED_PACKAGE:
+            package_name, version_code, version_name = parse_apk_identity(badging)
+            if package_name != EXPECTED_PACKAGE:
                 raise RuntimeError("Release APK application ID is not com.jianglab.suibo")
-            version_code, version_name = package.group(2), package.group(3)
+            previous_version = "NOT CHECKED"
+            if previous_apk is not None:
+                older = previous_apk.expanduser().resolve()
+                if not older.is_file():
+                    raise RuntimeError("Previous APK file does not exist")
+                old_badging = run_safe(
+                    [aapt, "dump", "badging", str(older)],
+                    cwd=ROOT, environment=environment, redactions=secrets,
+                )
+                old_package, old_code, old_version = parse_apk_identity(old_badging)
+                if old_package != package_name:
+                    raise RuntimeError("Previous APK uses a different Android applicationId")
+                old_signing = run_safe(
+                    [apksigner, "verify", "--print-certs", str(older)],
+                    cwd=ROOT, environment=environment, redactions=secrets,
+                )
+                old_cert = checked_cert_hash(
+                    old_signing,
+                    r"Signer #1 certificate SHA-256 digest:\s*([0-9a-f:]{64,})",
+                )
+                if old_cert != signed_cert:
+                    raise RuntimeError("Previous APK has a different signing certificate")
+                if old_code >= version_code:
+                    raise RuntimeError("New versionCode must exceed the previous APK")
+                previous_version = f"{old_version} ({old_code}), UPGRADABLE"
+
             safe_version = re.sub(r"[^A-Za-z0-9_.-]", "_", version_name)
             destination = output_dir / f"Suibo-Android-{safe_version}-{version_code}-release.apk"
             report = output_dir / f"Suibo-Android-signing-report-{version_code}.txt"
@@ -224,6 +258,7 @@ def build(keys: Path, output_dir: Path) -> Path:
                     f"Verified UTC: {datetime.now(timezone.utc).isoformat()}",
                     f"Application ID: {package.group(1)}",
                     f"Version code: {version_code}",
+                    f"Previous APK upgrade preflight: {previous_version}",
                     f"Version name: {version_name}",
                     f"APK file: {destination.name}",
                     f"APK bytes: {destination.stat().st_size}",
@@ -250,9 +285,11 @@ def main() -> int:
                         help="Private signing ZIP from the user's Google Drive")
     parser.add_argument("--output-dir", required=True, type=Path,
                         help="Private directory OUTSIDE the public repository")
+    parser.add_argument("--previous-apk", type=Path,
+                        help="Optional existing APK for real signature/package/version upgrade check")
     args = parser.parse_args()
     try:
-        build(args.keys, args.output_dir)
+        build(args.keys, args.output_dir, previous_apk=args.previous_apk)
         return 0
     except Exception as error:
         # Deliberately suppress stack traces for signing operations.

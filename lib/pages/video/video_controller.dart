@@ -16,6 +16,7 @@ import 'package:kazumi/services/video_source/direct_video_source.dart';
 import 'package:kazumi/services/danmaku/media_danmaku_service.dart';
 import 'package:kazumi/services/danmaku/manual_danmaku_link_store.dart';
 import 'package:kazumi/request/apis/danmaku_api.dart';
+import 'package:kazumi/request/clients/danmaku_client.dart';
 import 'package:kazumi/pages/player/controller/player_danmaku_controller.dart';
 import 'package:kazumi/bean/dialog/dialog_helper.dart';
 import 'package:mobx/mobx.dart';
@@ -546,12 +547,16 @@ abstract class _VideoPageController with Store implements Disposable {
 
   Future<DanmakuLoadResult?> _rememberedDanmaku(
       PlaybackInitParams params) async {
-    final linkedId = ManualDanmakuLinkStore.lookup(
+    final remembered = ManualDanmakuLinkStore.lookupWithSource(
       params.bangumiId, params.danmakuEpisodeNumber,
     );
-    if (linkedId == null) return null;
+    if (remembered == null) return null;
     try {
-      final entries = await DanmakuApi.getDanDanmakuByEpisodeID(linkedId);
+      final entries = await DanmakuApi.getDanDanmakuByEpisodeID(
+        remembered.episodeId,
+        preferCompatible: remembered.compatibleProvider,
+        strictProvider: true,
+      );
       if (entries.isEmpty) return null;
       return DanmakuLoadResult.success(danmakus: entries, bangumiID: 0);
     } catch (error) {
@@ -601,10 +606,16 @@ abstract class _VideoPageController with Store implements Disposable {
             titleAliases: [bangumiItem.nameCn, bangumiItem.name],
             pageUrls: [params.pageUrl, src, bangumiItem.sourceUrl],
           );
-          result = DanmakuLoadResult.success(
-            danmakus: matched?.entries ?? const [],
-            bangumiID: matched?.dandanId ?? 0,
-          );
+          // No provider is a connection failure, not a genuine zero-result
+          // search. Native Bilibili/public-URL matches may still succeed.
+          final providerMissing = !DanmakuClient.hasOfficialCredentials &&
+              !DanmakuClient.hasCompatibleProvider;
+          result = matched == null && providerMissing
+              ? DanmakuLoadResult.failed(bangumiID: 0)
+              : DanmakuLoadResult.success(
+                  danmakus: matched?.entries ?? const [],
+                  bangumiID: matched?.dandanId ?? 0,
+                );
           if (!params.isLocalPlayback && result.hasDanmakus) {
             // Cache only when a matching download record already exists.
             unawaited(playerController.danmaku.downloadController
@@ -624,7 +635,9 @@ abstract class _VideoPageController with Store implements Disposable {
           params.danmakuEpisodeNumber,
         );
         result = original;
-        if (bangumiItem.type != 2 && !original.hasDanmakus) {
+        // Keep Kazumi's original Bangumi-ID danmaku priority. If it fails,
+        // anime gets the same safe public-source fallback as movies/dramas.
+        if (!params.isLocalPlayback && !original.hasDanmakus) {
           final matched = await MediaDanmakuService.match(
             title: bangumiItem.nameCn.isNotEmpty
                 ? bangumiItem.nameCn
@@ -633,6 +646,7 @@ abstract class _VideoPageController with Store implements Disposable {
             episodeTitle: params.episodeTitle,
             titleAliases: [bangumiItem.nameCn, bangumiItem.name],
             pageUrls: [params.pageUrl, src],
+            preferAnimation: true,
           );
           if (matched != null && matched.entries.isNotEmpty) {
             result = DanmakuLoadResult.success(
@@ -652,8 +666,14 @@ abstract class _VideoPageController with Store implements Disposable {
           );
         } else {
           playerController.danmaku.applyUnavailableDanmakuLoad(result);
-          if (result.isFailed && !bangumiItem.isExternal) {
-            KazumiDialog.showToast(message: '弹幕加载失败，可手动检索');
+          if (result.isFailed) {
+            final disconnected = !DanmakuClient.hasOfficialCredentials &&
+                !DanmakuClient.hasCompatibleProvider;
+            KazumiDialog.showToast(
+              message: disconnected
+                  ? '弹幕搜索服务未连接：自动匹配和手动搜索均无法正常使用'
+                  : '弹幕连接或匹配失败，可手动检索',
+            );
           }
         }
       }

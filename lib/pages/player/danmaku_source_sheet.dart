@@ -17,6 +17,7 @@ import 'package:kazumi/modules/danmaku/danmaku_episode_response.dart';
 import 'package:kazumi/modules/danmaku/danmaku_search_response.dart';
 import 'package:kazumi/pages/player/controller/player_danmaku_controller.dart';
 import 'package:kazumi/request/apis/danmaku_api.dart';
+import 'package:kazumi/request/clients/danmaku_client.dart';
 import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/services/storage/storage.dart';
 import 'package:kazumi/services/danmaku/manual_danmaku_link_store.dart';
@@ -118,6 +119,7 @@ class _DanmakuSourceSheetState extends State<_DanmakuSourceSheet> {
   List<DanmakuSearchAnime> _animes = const [];
   List<DanmakuEpisode> _episodes = const [];
   String? _animeTitle;
+  bool _selectedCompatibleProvider = false;
   int? _segmentStart;
   String? _error;
   bool _loading = false;
@@ -175,12 +177,19 @@ class _DanmakuSourceSheetState extends State<_DanmakuSourceSheet> {
         _hasMore = response.hasMore;
         if (response.animes.isEmpty) _error = '未找到作品';
       });
+    } on DanmakuProviderUnavailable {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = '弹幕服务未连接：当前版本缺少有效的弹幕检索接口，'
+            '不是作品没有弹幕。请使用接入正式服务的安装版本。';
+      });
     } catch (error) {
       KazumiLogger().w('Danmaku source search failed', error: error);
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = '搜索失败';
+        _error = '弹幕服务请求失败，请检查连接后重试';
       });
     }
   }
@@ -190,6 +199,7 @@ class _DanmakuSourceSheetState extends State<_DanmakuSourceSheet> {
       _loading = true;
       _error = null;
       _animeTitle = anime.animeTitle;
+      _selectedCompatibleProvider = anime.compatibleProvider;
       _step = _SourceStep.episode;
       _episodes = const [];
       _episodeSearchController.clear();
@@ -197,12 +207,17 @@ class _DanmakuSourceSheetState extends State<_DanmakuSourceSheet> {
       _segmentStart = null;
     });
     try {
-      final response =
-          await DanmakuApi.getDanDanEpisodesByDanDanBangumiID(anime.animeId);
+      final episodes = anime.episodes.isNotEmpty
+          ? anime.episodes
+          : (await DanmakuApi.getDanDanEpisodesByDanDanBangumiID(
+              anime.animeId,
+              preferCompatible: anime.compatibleProvider,
+              strictProvider: true,
+            )).episodes;
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _episodes = response.episodes;
+        _episodes = episodes;
         if (_episodes.isEmpty) _error = '暂无分集';
       });
     } catch (error) {
@@ -220,15 +235,21 @@ class _DanmakuSourceSheetState extends State<_DanmakuSourceSheet> {
     try {
       widget.onBeforeApply();
       final hasDanmakus = await widget.danmakuController
-          .getDanDanmakuByEpisodeID(episode.episodeId);
+          .getDanDanmakuByEpisodeID(
+        episode.episodeId,
+        preferCompatible: _selectedCompatibleProvider,
+      );
       if (!mounted) return;
       widget.danmakuController.setDanmakuEnabled(hasDanmakus);
       var saved = false;
       if (hasDanmakus && widget.rememberSelection &&
           !GStorage.getSetting(SettingsKeys.privateMode)) {
         try {
-          await ManualDanmakuLinkStore.save(
-            widget.bangumiId, widget.episodeNumber, episode.episodeId,
+          await ManualDanmakuLinkStore.saveWithSource(
+            widget.bangumiId,
+            widget.episodeNumber,
+            episode.episodeId,
+            compatibleProvider: _selectedCompatibleProvider,
           );
           saved = true;
         } catch (error) {
@@ -409,7 +430,7 @@ class _DanmakuSourceSheetState extends State<_DanmakuSourceSheet> {
           ),
         ),
         if (widget.rememberSelection &&
-            ManualDanmakuLinkStore.lookup(
+            ManualDanmakuLinkStore.lookupWithSource(
                   widget.bangumiId, widget.episodeNumber) != null)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),

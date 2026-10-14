@@ -16,6 +16,7 @@ import 'package:kazumi/modules/bangumi/bangumi_collection_type.dart';
 import 'package:kazumi/modules/comments/comment_item.dart';
 import 'package:kazumi/utils/search_parser.dart';
 import 'package:kazumi/utils/async_rate_limiter.dart';
+import 'package:kazumi/pages/popular/home_media_category.dart';
 
 class BangumiSearchPage {
   const BangumiSearchPage({
@@ -216,6 +217,97 @@ class BangumiApi {
     return bangumiList;
   }
 
+  /// Genre queries use the same popularity ranking as the original search.
+  /// Bangumi combines multiple 'tag' values with AND; alternate work-kind
+  /// tags are queried independently to avoid requiring all aliases at once.
+  static Map<String, dynamic> buildHomeRecommendationParams({
+    required HomeMediaCategory category,
+    required String workKindTag,
+    String subcategory = '',
+  }) {
+    if (!category.supportsSubcategory(subcategory)) {
+      throw ArgumentError.value(subcategory, 'subcategory');
+    }
+    if (!category.genreTags.contains(workKindTag) &&
+        !(category == HomeMediaCategory.anime && workKindTag.isEmpty)) {
+      throw ArgumentError.value(workKindTag, 'workKindTag');
+    }
+    final tags = category.combinedTags(workKindTag, subcategory);
+    return {
+      'keyword': '',
+      'sort': 'heat',
+      'filter': {
+        'type': [category.subjectType],
+        if (tags.isNotEmpty) 'tag': tags,
+        'nsfw': false,
+      },
+    };
+  }
+
+  static Future<List<BangumiItem>> getHomeRecommendations({
+    required HomeMediaCategory category,
+    String subcategory = '',
+    int count = 24,
+  }) async {
+    final selected = <BangumiItem>[];
+    final ids = <int>{};
+    final kindTags = category.genreTags.isEmpty
+        ? const <String>['']
+        : category.genreTags;
+    for (final kindTag in kindTags) {
+      if (selected.length >= count) {
+        break;
+      }
+      var offset = 0;
+      const pageLimit = 100;
+      while (selected.length < count) {
+        try {
+          final response = await _client.post(
+            ApiEndpoints.formatUrl(
+              ApiEndpoints.bangumiAPIDomain + ApiEndpoints.bangumiRankSearch,
+              [pageLimit, offset],
+            ),
+            data: buildHomeRecommendationParams(
+              category: category,
+              workKindTag: kindTag,
+              subcategory: subcategory,
+            ),
+          );
+          final rows = response['data'];
+          if (rows is! List || rows.isEmpty) {
+            break;
+          }
+          for (final row in rows) {
+            if (row is! Map<String, dynamic>) {
+              continue;
+            }
+            try {
+              final item = BangumiItem.fromJson(row);
+              if (item.type == category.subjectType &&
+                  (item.name.isNotEmpty || item.nameCn.isNotEmpty) &&
+                  ids.add(item.id)) {
+                selected.add(item);
+              }
+            } catch (error) {
+              KazumiLogger().w('Home entry could not be parsed', error: error);
+            }
+            if (selected.length >= count) {
+              break;
+            }
+          }
+          if (rows.length < pageLimit) {
+            break;
+          }
+          offset += rows.length;
+        } catch (error) {
+          KazumiLogger().w('Home category lookup failed', error: error);
+          break;
+        }
+      }
+    }
+    return selected;
+  }
+
   static String buildBangumiMirrorPopularPath({
     String tag = '',
     int limit = 24,
@@ -283,9 +375,11 @@ class BangumiApi {
     final filter = <String, dynamic>{
       "type": [2, 6],
       if (tags.isNotEmpty) "tag": tags,
-      if (rankFilter != null) "rank": rankFilter,
       "nsfw": false
     };
+    if (rankFilter != null) {
+      filter["rank"] = rankFilter;
+    }
 
     if (dateRange?.isValid == true) {
       filter["air_date"] = [">=${dateRange!.start}", "<${dateRange.end}"];

@@ -1,0 +1,30 @@
+name: Suibo real video playback bytes
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/services/video_source/**'
+      - 'lib/services/plugin/**'
+      - 'lib/services/storage/settings_keys.dart'
+      - 'lib/pages/video/**'
+      - 'scripts/smoke_suibo_playback_real.py'
+      - '.github/workflows/suibo-real-playback.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  playable-media:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install actual video decoder for playback verification
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          command -v ffprobe
+      - name: Validate real CMS episode and first media segment
+        run: python -u scripts/smoke_suibo_playback_real.py

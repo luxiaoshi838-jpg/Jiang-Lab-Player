@@ -20,3 +20,16 @@ bool isKnownLivePage(String url) {
   };
   return hosts.contains(uri.host.toLowerCase());
 }
+
+/// Legacy Kazumi rules declare 'anime' as their content type. Do not search
+/// anime-only sites by default for a confirmed live-action movie/TV work;
+/// this previously produced 16 useless "no results" rows and slow requests.
+/// Unknown or multi-category rules remain eligible, never silently deleted.
+bool isRelevantRuleTypeForDrama(String ruleType) =>
+    ruleType.trim().toLowerCase() != 'anime';
+
+/// Catalogue records do not have a Bangumi type; resolve these explicitly.
+bool isConfirmedDramaCatalogue(int bangumiType, String sourcePlugin) =>
+    bangumiType == 6 ||
+    sourcePlugin == '百科影视目录' ||
+    sourcePlugin == 'TVmaze节目目录';

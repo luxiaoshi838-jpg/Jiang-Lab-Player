@@ -23,38 +23,43 @@ class VideoPageLayout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
-      final fillsWindow =
-          fullscreen || isPip || constraints.maxWidth > constraints.maxHeight;
-      final hasSidePanel = fillsWindow && !isPip && sidePanel != null;
+      // Both Android and Windows keep video above the episode/comment tabs.
+      // Only explicit fullscreen or picture-in-picture hides the lower area.
+      final fillsWindow = fullscreen || isPip;
+      const hasSidePanel = false;
+      final normalHeight = (constraints.maxWidth * 9 / 16)
+          .clamp(150.0, constraints.maxHeight * 0.56)
+          .toDouble();
       return SafeArea(
         top: !fillsWindow,
         bottom: !fillsWindow,
         left: !fillsWindow,
         right: !fillsWindow,
-        child: Stack(
-          alignment: Alignment.centerRight,
+        child: Column(
           children: [
-            Column(
-              children: [
-                Flexible(
-                  flex: fillsWindow ? 1 : 0,
-                  child: SizedBox(
-                    height: fillsWindow ? double.infinity : null,
-                    width: double.infinity,
-                    child: AspectRatio(
-                      aspectRatio: 16 / 9,
-                      child: Builder(
-                          builder: (context) => playerBuilder(context, (
-                                fillsWindow: fillsWindow,
-                                hasSidePanel: hasSidePanel
-                              ))),
-                    ),
-                  ),
+            if (fillsWindow)
+              Expanded(
+                child: SizedBox(
+                  width: double.infinity,
+                  child: playerBuilder(context, (
+                    fillsWindow: fillsWindow,
+                    hasSidePanel: hasSidePanel,
+                  )),
                 ),
-                if (!fillsWindow) Expanded(child: tabs),
-              ],
-            ),
-            if (hasSidePanel) sidePanel!,
+              )
+            else
+              SizedBox(
+                height: normalHeight,
+                width: double.infinity,
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: playerBuilder(context, (
+                    fillsWindow: fillsWindow,
+                    hasSidePanel: hasSidePanel,
+                  )),
+                ),
+              ),
+            if (!fillsWindow) Expanded(child: tabs),
           ],
         ),
       );

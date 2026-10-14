@@ -46,9 +46,11 @@ mixin _$PlayerDanmakuController on _PlayerDanmakuController, Store {
       context: context);
 
   @override
-  Future<bool> getDanDanmakuByEpisodeID(int episodeID) {
-    return _$getDanDanmakuByEpisodeIDAsyncAction
-        .run(() => super.getDanDanmakuByEpisodeID(episodeID));
+  Future<bool> getDanDanmakuByEpisodeID(int episodeID,
+      {bool preferCompatible = false}) {
+    return _$getDanDanmakuByEpisodeIDAsyncAction.run(() =>
+        super.getDanDanmakuByEpisodeID(episodeID,
+            preferCompatible: preferCompatible));
   }
 
   late final _$_PlayerDanmakuControllerActionController =

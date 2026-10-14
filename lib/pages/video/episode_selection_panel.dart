@@ -44,6 +44,8 @@ class EpisodeSelectionPanelState extends State<EpisodeSelectionPanel> {
       ListObserverController(controller: _scrollController)
         ..cacheJumpIndexOffset = false;
   late int _visibleRoad = widget.selectedRoad;
+  static const int _pageSize = 50;
+  late int _visiblePage = (widget.selectedEpisode - 1) ~/ _pageSize;
 
   bool get _canLocate =>
       widget.selectedRoad >= 0 &&
@@ -56,13 +58,21 @@ class EpisodeSelectionPanelState extends State<EpisodeSelectionPanel> {
 
   void _selectRoad(int road) {
     if (_visibleRoad == road) return;
-    setState(() => _visibleRoad = road);
+    setState(() {
+      _visibleRoad = road;
+      _visiblePage = road == widget.selectedRoad
+          ? (widget.selectedEpisode - 1) ~/ _pageSize
+          : 0;
+    });
     if (_scrollController.hasClients) _scrollController.jumpTo(0);
   }
 
   Future<void> revealCurrentEpisode() async {
     if (!_canLocate) return;
-    setState(() => _visibleRoad = widget.selectedRoad);
+    setState(() {
+      _visibleRoad = widget.selectedRoad;
+      _visiblePage = (widget.selectedEpisode - 1) ~/ _pageSize;
+    });
     // Wait for the observer to bind the new road's sliver after layout.
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted ||
@@ -72,7 +82,7 @@ class EpisodeSelectionPanelState extends State<EpisodeSelectionPanel> {
       return;
     }
 
-    final index = widget.selectedEpisode - 1;
+    final index = (widget.selectedEpisode - 1) % _pageSize;
     final toolbarHeight = _toolbarHeight;
     final item = _observerController.observeItem(index: index);
     if (item != null) {
@@ -140,6 +150,36 @@ class EpisodeSelectionPanelState extends State<EpisodeSelectionPanel> {
                         onChanged: _selectRoad,
                         disableAnimations: widget.disableAnimations,
                       ),
+                      if (count > _pageSize) ...[
+                        const SizedBox(height: 12),
+                        SingleChildScrollView(
+                          key: const ValueKey('suibo-player-range-tabs'),
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              for (var page = 0;
+                                  page < (count + _pageSize - 1) ~/ _pageSize;
+                                  page++)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: ChoiceChip(
+                                    key: ValueKey('suibo-player-range-$page'),
+                                    label: Text(
+                                      '${page * _pageSize + 1}-${math.min((page + 1) * _pageSize, count)}',
+                                    ),
+                                    selected: page == _visiblePage,
+                                    onSelected: (_) {
+                                      setState(() => _visiblePage = page);
+                                      if (_scrollController.hasClients) {
+                                        _scrollController.jumpTo(0);
+                                      }
+                                    },
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -203,23 +243,25 @@ class EpisodeSelectionPanelState extends State<EpisodeSelectionPanel> {
                     16 + MediaQuery.paddingOf(context).bottom,
                   ),
                   sliver: SliverList.builder(
-                    itemCount: count,
+                    itemCount: math.min(_pageSize,
+                        math.max(0, count - _visiblePage * _pageSize)),
                     itemBuilder: (context, index) {
-                      final episode = index + 1;
-                      final name = index < road!.identifier.length &&
-                              road.identifier[index].trim().isNotEmpty
-                          ? road.identifier[index]
+                      final absoluteIndex = _visiblePage * _pageSize + index;
+                      final episode = absoluteIndex + 1;
+                      final name = absoluteIndex < road!.identifier.length &&
+                              road.identifier[absoluteIndex].trim().isNotEmpty
+                          ? road.identifier[absoluteIndex]
                           : '第$episode集';
                       return _EpisodeRow(
                         key: ValueKey('$_visibleRoad:$episode'),
                         name: name,
                         first: index == 0,
-                        last: index == count - 1,
+                        last: episode == count || index == _pageSize - 1,
                         selected: _visibleRoad == widget.selectedRoad &&
                             episode == widget.selectedEpisode,
                         isPlaying: widget.isPlaying,
                         isOffline: widget.isOffline,
-                        download: widget.downloads[road.data[index]],
+                        download: widget.downloads[road.data[absoluteIndex]],
                         disableAnimations: widget.disableAnimations,
                         onTap: () =>
                             widget.onEpisodeSelected(episode, _visibleRoad),

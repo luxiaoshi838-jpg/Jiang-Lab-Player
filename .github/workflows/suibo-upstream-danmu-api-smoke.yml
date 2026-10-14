@@ -1,0 +1,64 @@
+name: Suibo ephemeral upstream danmu_api smoke
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/probe_suibo_selfhosted_backend.py'
+      - 'services/danmaku/**'
+      - 'render.yaml'
+      - '.github/workflows/suibo-upstream-danmu-api-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-source-episode-comments:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: huangxd-/danmu_api
+          ref: f47b786876f2ab51ef69518e5e0b1c0574664589
+          path: third_party_runtime
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned upstream in temporary runner only
+        working-directory: third_party_runtime
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Start ephemeral upstream service without application secrets
+        working-directory: third_party_runtime
+        run: |
+          DANMU_API_PORT=9321 node danmu_api/server.js >/tmp/suibo-upstream-smoke.log 2>&1 &
+          echo $! > /tmp/suibo-upstream-smoke.pid
+      - name: Verify real anime and drama title to episode to nonempty comments
+        run: python3 -u scripts/probe_suibo_selfhosted_backend.py
+        env:
+          SUIBO_LOCAL_DANMU_URL: http://127.0.0.1:9321
+      - name: Stop bare upstream before gateway smoke
+        run: |
+          kill "$(cat /tmp/suibo-upstream-smoke.pid)" || true
+          sleep 2
+      - name: Start gateway with private test-only token
+        env:
+          SUIBO_BACKEND_SECRET: ci-only-not-for-production-strong-backend-secret
+          SUIBO_UPSTREAM_DIR: ${{ github.workspace }}/third_party_runtime
+          PORT: '10000'
+        run: |
+          node --check services/danmaku/gateway.mjs
+          node services/danmaku/gateway.mjs >/tmp/suibo-gateway-smoke.log 2>&1 &
+          echo $! > /tmp/suibo-gateway-smoke.pid
+      - name: Verify protected gateway yields real nonempty episode comments
+        env:
+          SUIBO_LOCAL_DANMU_URL: http://127.0.0.1:10000
+        run: |
+          python3 -u scripts/probe_suibo_selfhosted_backend.py
+          status=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:10000/api/logs)
+          test "$status" = "404"
+      - name: Print safe startup errors on failure
+        if: failure()
+        run: |
+          for file in /tmp/suibo-upstream-smoke.log /tmp/suibo-gateway-smoke.log; do
+            test ! -f "$file" || tail -n 25 "$file" | sed -E 's#https?://[^ ]+#<url>#g'
+          done

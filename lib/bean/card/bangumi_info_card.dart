@@ -183,8 +183,10 @@ class _BangumiInfoCardVState extends State<BangumiInfoCardV> {
                                     '放送开始:',
                                   ),
                                   Text(
-                                    widget.bangumiItem.airDate == ''
-                                        ? '2000-11-11' // Skeleton Loader 占位符
+                                    widget.bangumiItem.airDate.isEmpty
+                                        ? (widget.isLoading
+                                            ? '2000-11-11'
+                                            : '日期暂无资料')
                                         : widget.bangumiItem.airDate,
                                     style: TextStyle(
                                       fontSize: 20,
@@ -195,9 +197,12 @@ class _BangumiInfoCardVState extends State<BangumiInfoCardV> {
                                   ),
                                   SizedBox(height: 8),
                                   Text(
-                                    widget.showRating
-                                        ? '${widget.bangumiItem.votes} 人评分:'
-                                        : '*** 人评分:',
+                                    widget.bangumiItem.votes <= 0 &&
+                                            !widget.isLoading
+                                        ? '暂无评分'
+                                        : (widget.showRating
+                                            ? '${widget.bangumiItem.votes} 人评分:'
+                                            : '*** 人评分:'),
                                   ),
                                   if (widget.isLoading)
                                     // Skeleton Loader 占位符
@@ -211,7 +216,8 @@ class _BangumiInfoCardVState extends State<BangumiInfoCardV> {
                                             .primary,
                                       ),
                                     ),
-                                  if (!widget.isLoading)
+                                  if (!widget.isLoading &&
+                                      widget.bangumiItem.votes > 0)
                                     Row(
                                       children: [
                                         Text(
@@ -245,10 +251,12 @@ class _BangumiInfoCardVState extends State<BangumiInfoCardV> {
                                       ],
                                     ),
                                   SizedBox(height: 8),
-                                  Text(
-                                    'Bangumi Ranked:',
-                                  ),
-                                  Text(
+                                  if (widget.isLoading ||
+                                      widget.bangumiItem.rank > 0)
+                                    Text('Bangumi Ranked:'),
+                                  if (widget.isLoading ||
+                                      widget.bangumiItem.rank > 0)
+                                    Text(
                                     widget.showRating
                                         ? '#${widget.bangumiItem.rank}'
                                         : '***',

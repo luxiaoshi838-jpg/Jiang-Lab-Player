@@ -1,0 +1,132 @@
+name: Suibo encrypted one-day installer handoff
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  transport-preflight:
+    runs-on: ubuntu-latest
+    env:
+      DANDANAPI_APPID: ${{ secrets.DANDANAPI_APPID }}
+      DANDANAPI_KEY: ${{ secrets.DANDANAPI_KEY }}
+      SUIBO_DANMU_API_URL: ${{ secrets.SUIBO_DANMU_API_URL || 'https://suibo-danmaku.onrender.com' }}
+    steps:
+      - name: Refuse unusable anime-danmaku release
+        run: |
+          if [[ ( -z "$DANDANAPI_APPID" || -z "$DANDANAPI_KEY" ) && -z "$SUIBO_DANMU_API_URL" ]]; then
+            echo "::error::NO_DANMAKU_PROVIDER: no approved source for anime and TV comments"
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install cryptography
+      - name: Encrypt non-sensitive preflight token
+        run: |
+          printf 'Suibo encrypted artifact transport test\n' > preflight.txt
+          python scripts/encrypt_temporary_transfer.py --certificate scripts/public_cert_for_encrypted_transfer.pem --input preflight.txt --output suibo-transfer-preflight.enc
+      - name: Verify encrypted artifact transport only
+        uses: actions/upload-artifact@v4
+        with:
+          name: suibo-encrypted-preflight
+          path: suibo-transfer-preflight.enc
+          retention-days: 1
+          if-no-files-found: error
+  windows-setup:
+    needs: transport-preflight
+    runs-on: windows-latest
+    env:
+      DANDANAPI_APPID: ${{ secrets.DANDANAPI_APPID }}
+      DANDANAPI_KEY: ${{ secrets.DANDANAPI_KEY }}
+      SUIBO_DANMU_API_URL: ${{ secrets.SUIBO_DANMU_API_URL || 'https://suibo-danmaku.onrender.com' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install cryptography
+          $compiler = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $compiler)) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "Inno Setup missing" }
+          }
+      - name: Build complete Windows installer
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP "suibo-private-build"
+          & ./scripts/build_windows_installer.ps1 -OutputDirectory $dir
+          if ($LASTEXITCODE -ne 0) { throw "Windows installation build failed" }
+          $exe = @(Get-ChildItem $dir -Filter "Suibo-Setup-*-Windows-x64.exe")
+          if ($exe.Count -ne 1 -or $exe[0].Length -lt 1048576) { throw "Missing Windows Setup EXE" }
+          Compress-Archive -LiteralPath $exe[0].FullName, (Get-ChildItem $dir -Filter "*.txt" | Select-Object -First 1).FullName -DestinationPath (Join-Path $env:RUNNER_TEMP "suibo-windows-payload.zip")
+      - name: Encrypt executable before any upload
+        shell: pwsh
+        run: |
+          python scripts/encrypt_temporary_transfer.py --certificate scripts/public_cert_for_encrypted_transfer.pem --input (Join-Path $env:RUNNER_TEMP "suibo-windows-payload.zip") --output "suibo-windows-setup.enc"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: suibo-encrypted-windows-setup
+          path: suibo-windows-setup.enc
+          retention-days: 1
+          if-no-files-found: error
+  android-arm64-release:
+    needs: transport-preflight
+    runs-on: ubuntu-latest
+    env:
+      DANDANAPI_APPID: ${{ secrets.DANDANAPI_APPID }}
+      DANDANAPI_KEY: ${{ secrets.DANDANAPI_KEY }}
+      SUIBO_DANMU_API_URL: ${{ secrets.SUIBO_DANMU_API_URL || 'https://suibo-danmaku.onrender.com' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+      - name: Clean runner to leave space for native Android SDK
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/share/powershell /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/lib/android/sdk/system-images /opt/az /opt/microsoft || true
+          df -h /
+      - name: Build production-mode Android arm64 requiring later private signature
+        env:
+          ORG_GRADLE_PROJECT_SUIBO_ALLOW_UNSIGNED_CANDIDATE: "true"
+        run: |
+          flutter pub get
+          flutter build apk --release --target-platform android-arm64 \
+            --dart-define=DANDANAPI_APPID="$DANDANAPI_APPID" \
+            --dart-define=DANDANAPI_KEY="$DANDANAPI_KEY" \
+            --dart-define=SUIBO_DANMU_API_URL="$SUIBO_DANMU_API_URL"
+      - name: Encrypt ZIP with APK and local re-signing utility
+        run: |
+          python -m pip install cryptography
+          mkdir -p android-stage
+          apk="build/app/outputs/flutter-apk/app-release.apk"
+          if [ ! -f "$apk" ]; then apk="$(find build/app/outputs/apk -name '*release*unsigned.apk' -type f | head -n 1)"; fi
+          test -f "$apk"
+          cp "$apk" android-stage/REQUIRES-PRIVATE-RESIGN.apk
+          jarpath=$(find "$ANDROID_HOME/build-tools" -path "*/lib/apksigner.jar" | sort -V | tail -n 1)
+          test -f "$jarpath"
+          cp "$jarpath" android-stage/apksigner.jar
+          (cd android-stage && zip ../suibo-android-payload.zip REQUIRES-PRIVATE-RESIGN.apk apksigner.jar)
+          python scripts/encrypt_temporary_transfer.py --certificate scripts/public_cert_for_encrypted_transfer.pem --input suibo-android-payload.zip --output suibo-android-release.enc
+      - uses: actions/upload-artifact@v4
+        with:
+          name: suibo-encrypted-android-release
+          path: suibo-android-release.enc
+          retention-days: 1
+          if-no-files-found: error

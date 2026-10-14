@@ -18,6 +18,42 @@ void main() {
   const second = MediaSourceCandidate(
       pluginName: '资源站B', title: '《亮剑》', url: 'https://b.example/v/2');
 
+  test('anime and live-action 凡人修仙传 retain separate source and poster', () {
+    final drama = subject('凡人修仙传', 601);
+    drama.images = {'large': 'https://example.org/drama.jpg'};
+    final works = <BangumiItem>[drama];
+    MediaWorkIndex.addRuleHit(works, const MediaSourceCandidate(
+      pluginName: '动画规则',
+      title: '凡人修仙传',
+      url: 'https://anime.example/fanren',
+      imageUrl: 'https://anime.example/poster.jpg',
+      mediaType: 2,
+    ));
+    expect(works, hasLength(2));
+    expect(drama.discoveredSources, isEmpty);
+    final anime = works.singleWhere((w) => w.type == 2);
+    expect(anime.images['large'], 'https://anime.example/poster.jpg');
+    expect(anime.discoveredSources, hasLength(1));
+    MediaWorkIndex.addMetadata(works, subject('凡人修仙传', 602));
+    expect(works.singleWhere((w) => w.type == 2).images['large'],
+        'https://anime.example/poster.jpg');
+    expect(works.where((w) => w.type == 6), hasLength(1));
+  });
+
+  test('live-action metadata never replaces same-title anime source shell', () {
+    final works = <BangumiItem>[];
+    MediaWorkIndex.addRuleHit(works, const MediaSourceCandidate(
+      pluginName: '动画规则',
+      title: '凡人修仙传',
+      url: 'https://anime.example/fanren',
+      mediaType: 2,
+    ));
+    MediaWorkIndex.addMetadata(works, subject('凡人修仙传', 701));
+    expect(works, hasLength(2));
+    expect(works.singleWhere((w) => w.type == 2).discoveredSources,
+        hasLength(1));
+  });
+
   test('two source URLs become distinct selectable lines under one work', () {
     final works = <BangumiItem>[subject('亮剑', 127)];
     MediaWorkIndex.addRuleHit(works, first);
@@ -45,6 +81,25 @@ void main() {
     expect(works.single.id, 127);
     expect(works.single.isExternal, false);
     expect(works.single.discoveredSources, hasLength(2));
+  });
+
+  test('bracketed year result attaches only to compatible catalog edition', () {
+    final item = subject('亮剑', 127, date: '2005-09-12');
+    final works = <BangumiItem>[item];
+    MediaWorkIndex.addRuleHit(works, const MediaSourceCandidate(
+      pluginName: 'source',
+      title: '亮剑（2005）',
+      url: 'https://videos.example/lj2005',
+    ));
+    expect(works, hasLength(1));
+    expect(item.discoveredSources, hasLength(1));
+    MediaWorkIndex.addRuleHit(works, const MediaSourceCandidate(
+      pluginName: 'source',
+      title: '亮剑（2015）',
+      url: 'https://videos.example/lj2015',
+    ));
+    expect(works, hasLength(2));
+    expect(item.discoveredSources, hasLength(1));
   });
 
   test('names in different seasons are never collapsed', () {

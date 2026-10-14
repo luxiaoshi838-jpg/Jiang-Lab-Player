@@ -1,0 +1,1 @@
+2026-10-14 09:02 UTC: Windows build fails because info_episode_section.dart references isLiveOnlyRule without importing plugin_search_module.dart. Restore the import. No APK/EXE delivery is verified.
