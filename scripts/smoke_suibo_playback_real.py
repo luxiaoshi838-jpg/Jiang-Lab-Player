@@ -8,6 +8,8 @@ Never log full media URLs, tokens or personally identifying request headers.
 import ipaddress
 import json
 import re
+import shutil
+import subprocess
 import sys
 import urllib.parse
 import urllib.request
@@ -80,8 +82,26 @@ def first_hls_segment(url, depth=0):
     if not raw.lstrip().startswith("#EXTM3U"):
         raise ValueError("not an HLS manifest")
     lines = [x.strip() for x in raw.splitlines() if x.strip()]
-    if any(x.startswith("#EXT-X-KEY:") or x.startswith("#EXT-X-SESSION-KEY:") for x in lines):
-        raise ValueError("encrypted or rights-controlled HLS")
+    # AES-128 is a normal HLS transport mode, not in itself evidence of DRM.
+    # Only use publicly advertised HLS key URIs; never bypass auth/paywall/DRM.
+    keys = [x for x in lines
+            if x.startswith("#EXT-X-KEY:") or x.startswith("#EXT-X-SESSION-KEY:")]
+    if keys:
+        for key in keys:
+            if "METHOD=NONE" in key:
+                continue
+            if "METHOD=AES-128" not in key or "KEYFORMAT=" in key:
+                raise ValueError("unsupported or DRM-oriented HLS encryption")
+            k = re.search(r'URI="([^"]+)"', key)
+            if not k:
+                raise ValueError("AES-128 playlist missing public key URI")
+            key_url = urllib.parse.urljoin(url, k.group(1))
+            if not safe(key_url):
+                raise ValueError("AES-128 key is not a public URL")
+            key_bytes = fetch(key_url, limit=32)
+            if len(key_bytes) != 16:
+                raise ValueError("AES-128 key inaccessible")
+
     for i, line in enumerate(lines):
         if line.startswith("#EXT-X-STREAM-INF:") and i + 1 < len(lines):
             url2 = urllib.parse.urljoin(url, lines[i + 1])
@@ -100,8 +120,34 @@ def first_hls_segment(url, depth=0):
 def first_bytes(url):
     path = urllib.parse.urlsplit(url).path.lower()
     if path.endswith(".m3u8"):
-        return first_hls_segment(url)
-    return fetch(url, limit=MAX_MEDIA_BYTES, headers={"Range": "bytes=0-8191"})
+        data = first_hls_segment(url)
+        return data, True
+    return fetch(url, limit=MAX_MEDIA_BYTES, headers={"Range": "bytes=0-8191"}), False
+
+
+def video_decodes(url):
+    ffprobe = shutil.which("ffprobe")
+    if ffprobe is None:
+        raise ValueError("ffprobe decoder unavailable on CI")
+    command = [
+        ffprobe, "-hide_banner", "-v", "error", "-rw_timeout", "9000000",
+        "-user_agent", UA, "-probesize", "250000", "-analyzeduration", "1500000",
+        "-select_streams", "v:0", "-show_entries",
+        "stream=codec_name,width,height", "-of", "json", url,
+    ]
+    try:
+        out = subprocess.run(command, capture_output=True, text=True,
+                             timeout=19, check=False)
+    except subprocess.TimeoutExpired:
+        raise ValueError("media decoding timed out")
+    if out.returncode != 0:
+        raise ValueError("video decoder could not open stream")
+    try:
+        streams = json.loads(out.stdout).get("streams", [])
+    except (ValueError, AttributeError):
+        streams = []
+    return any(v.get("codec_name") and int(v.get("width", 0)) > 0
+               and int(v.get("height", 0)) > 0 for v in streams)
 
 
 def recognizable_media(data):
@@ -130,7 +176,7 @@ def main():
             break
 
     counters = dict(category_results=0, exact_details=0,
-                    direct_media_links=0, media_bytes=0)
+                    direct_media_links=0, media_bytes=0, video_decoded=0)
     for name, endpoint in sites:
         try:
             listing = api(endpoint, ac="list")
@@ -153,12 +199,18 @@ def main():
                         counters["direct_media_links"] += len(links)
                         for link in links[:2]:
                             try:
-                                data = first_bytes(link)
-                                if recognizable_media(data):
-                                    counters["media_bytes"] += 1
-                                    print("PLAYBACK_BYTES_OK source=", name,
+                                data, playlist = first_bytes(link)
+                                if not playlist and not recognizable_media(data):
+                                    raise ValueError("unrecognized direct media bytes")
+                                if len(data) < 1024:
+                                    raise ValueError("media segment too short")
+                                counters["media_bytes"] += 1
+                                if video_decodes(link):
+                                    counters["video_decoded"] += 1
+                                    print("PLAYBACK_DECODE_OK source=", name,
                                           "media_host=", urllib.parse.urlsplit(link).hostname, flush=True)
                                     break
+                                print("MEDIA_UNAVAILABLE no decoded video frames", flush=True)
                             except Exception as exc:
                                 reason = str(exc) if isinstance(exc, ValueError) else type(exc).__name__
                                 if len(reason) > 80:
@@ -169,10 +221,10 @@ def main():
         except Exception as exc:
             print("SOURCE_UNAVAILABLE", name, type(exc).__name__, flush=True)
     print("PLAYBACK_CHAIN_METRICS", json.dumps(counters, sort_keys=True), flush=True)
-    if counters["media_bytes"] == 0:
-        print("FAIL: catalog and manifest are not proof of playable video", flush=True)
+    if counters["video_decoded"] == 0:
+        print("FAIL: did not decode any video streams; metadata-only success is insufficient", flush=True)
         return 1
-    print("PASS: public media bytes received (not a decoder/frame-level test)", flush=True)
+    print("PASS: at least one real public media stream decoded", flush=True)
     return 0
 
 
