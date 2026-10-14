@@ -71,9 +71,16 @@ def search_official(title):
                   force_v=1, kw=title, pageno=1, v_ap=1, tab="all")
     rows = data.get("data", {}).get("longData", {}).get("rows", [])
     found = []
+    print(title, "360_RESULTS=", len(rows) if isinstance(rows,list) else "wrong-shape",
+          "MATCH_TITLES=", [str(r.get("titleTxt", ""))[:36] for r in rows[:8]]
+          if isinstance(rows,list) else [], flush=True)
     for row in rows if isinstance(rows, list) else []:
         if clean_title(row.get("titleTxt", "")) != clean_title(title):
             continue
+        print(title, "EXACT_KEYS=", sorted(row)[:22],
+              "SERIES_COUNT=", len(row.get("seriesPlaylinks") or []),
+              "SITES=", list((row.get("playlinks") or {}).keys())[:5],
+              flush=True)
         sites = row.get("playlinks") or {}
         if row.get("cat_name") == "电影":
             for url in sites.values():
