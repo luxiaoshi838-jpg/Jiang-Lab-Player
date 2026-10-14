@@ -1,25 +1,34 @@
+/// A stable episode identifier and an optional explicit numeric order.
+/// Compatible backends may label an episode as "正片" but still supply
+/// episodeNumber = "1" in their JSON representation.
 class DanmakuEpisode {
   int episodeId;
   String episodeTitle;
+  int? episodeNumber;
 
   DanmakuEpisode({
     required this.episodeId,
     required this.episodeTitle,
+    this.episodeNumber,
   });
 
   factory DanmakuEpisode.fromJson(Map<String, dynamic> json) {
+    final id = int.tryParse(json['episodeId'].toString());
+    if (id == null || id <= 0) {
+      throw const FormatException('Invalid danmaku episodeId');
+    }
     return DanmakuEpisode(
-      episodeId: json['episodeId'],
-      episodeTitle: json['episodeTitle'],
+      episodeId: id,
+      episodeTitle: (json['episodeTitle'] ?? '').toString(),
+      episodeNumber: int.tryParse((json['episodeNumber'] ?? '').toString()),
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'episodeId': episodeId,
-      'episodeTitle': episodeTitle,
-    };
-  }
+  Map<String, dynamic> toJson() => {
+        'episodeId': episodeId,
+        'episodeTitle': episodeTitle,
+        if (episodeNumber != null) 'episodeNumber': episodeNumber,
+      };
 }
 
 class DanmakuEpisodeResponse {
@@ -38,16 +47,24 @@ class DanmakuEpisodeResponse {
   });
 
   factory DanmakuEpisodeResponse.fromJson(Map<String, dynamic> json) {
-    var list = json['bangumi']['episodes'] as List;
-    List<DanmakuEpisode> episodeList =
-        list.map((i) => DanmakuEpisode.fromJson(i)).toList();
-
+    if (json['success'] == false) {
+      throw const FormatException('Danmaku episode service rejected request');
+    }
+    final rawBangumi = json['bangumi'];
+    if (rawBangumi is! Map || rawBangumi['episodes'] is! List) {
+      throw const FormatException('Invalid danmaku bangumi detail');
+    }
+    final id = int.tryParse((rawBangumi['animeId'] ?? '').toString()) ?? 0;
+    final episodes = <DanmakuEpisode>[
+      for (final raw in rawBangumi['episodes'])
+        if (raw is Map<String, dynamic>) DanmakuEpisode.fromJson(raw),
+    ];
     return DanmakuEpisodeResponse(
-      bangumiId: json['bangumi']['animeId'],
-      episodes: episodeList,
-      errorCode: json['errorCode'],
-      success: json['success'],
-      errorMessage: json['errorMessage'],
+      bangumiId: id,
+      episodes: episodes,
+      errorCode: int.tryParse((json['errorCode'] ?? 0).toString()) ?? 0,
+      success: json['success'] == true,
+      errorMessage: (json['errorMessage'] ?? '').toString(),
     );
   }
 
@@ -61,12 +78,13 @@ class DanmakuEpisodeResponse {
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'bangumi': episodes.map((episode) => episode.toJson()).toList(),
-      'errorCode': errorCode,
-      'success': success,
-      'errorMessage': errorMessage,
-    };
-  }
+  Map<String, dynamic> toJson() => {
+        'bangumi': {
+          'animeId': bangumiId,
+          'episodes': [for (final episode in episodes) episode.toJson()],
+        },
+        'errorCode': errorCode,
+        'success': success,
+        'errorMessage': errorMessage,
+      };
 }
