@@ -13,6 +13,7 @@ import 'package:kazumi/plugins/plugins.dart';
 import 'package:kazumi/plugins/plugins_controller.dart';
 import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/services/video_source/direct_video_source.dart';
+import 'package:kazumi/services/video_source/video_catalog_scope.dart';
 
 /// One shared vertical episode picker for Android and Windows. No guessed
 /// episodes or personalised recommendations: every entry comes from a rule.
