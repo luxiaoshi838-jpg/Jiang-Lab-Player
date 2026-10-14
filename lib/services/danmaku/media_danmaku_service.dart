@@ -6,10 +6,10 @@ import 'package:kazumi/modules/danmaku/danmaku_module.dart';
 import 'package:kazumi/modules/danmaku/danmaku_episode_response.dart';
 import 'package:kazumi/modules/danmaku/danmaku_search_response.dart';
 import 'package:kazumi/request/apis/danmaku_api.dart';
+import 'package:kazumi/request/clients/danmaku_client.dart';
 import 'package:kazumi/request/core/dio_factory.dart';
 import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/utils/danmaku.dart';
-import 'package:kazumi/utils/dandan_credentials.dart';
 
 /// Recorded Bilibili BV/av videos, never Bilibili live rooms.
 class BilibiliVideoRef {
@@ -81,10 +81,12 @@ class MediaDanmakuService {
     // titles (rather than guessing a different show or downloading catalogs).
     // Always load the explicit episodeId from the server's episode list.
     final searched = <String>{};
-    final officialConfigured =
-        (dandanCredentials['id'] ?? '').isNotEmpty &&
-        (dandanCredentials['value'] ?? '').isNotEmpty;
-    for (final query in officialConfigured
+    // Title matching must work with EITHER supported provider.
+    // Previously this whole block was disabled without official credentials,
+    // even if a compatible danmu_api title-search server was configured.
+    final titleProviderAvailable = DanmakuClient.hasOfficialCredentials ||
+        DanmakuClient.hasCompatibleProvider;
+    for (final query in titleProviderAvailable
         ? <String>[title, ...titleAliases]
         : const <String>[]) {
       final normalized = normalizeTitle(query);
@@ -485,9 +487,139 @@ class MediaDanmakuService {
     if (response.hasMore) return null;
     final unique = <int, DanmakuSearchAnime>{};
     for (final candidate in response.animes) {
-      if (titlesMatch(title, candidate.animeTitle)) {
-        unique[candidate.animeId] = candidate;
+      // Some compatible providers append "(2005)【电视剧】from 360".
+      // Such labels were searchable, but our exact-title rule discarded
+      // them. Remove *only* a recognized provider suffix, preserving other
+      // identity words (e.g. 新亮剑 versus 亮剑). Multiple matches remain
+      // ambiguous and are sent to manual selection instead of guessing.
+      var matches = titlesMatch(title, candidate.animeTitle);
+      if (!matches && candidate.compatibleProvider) {
+        final decorated = candidate.animeTitle;
+        if (decorated.contains('【') && decorated.contains('】from ')) {
+          final base = decorated.split('【').first.trim().replaceFirst(
+            RegExp(r'[（(](?:19|20)[0-9]{2}[)）]
+
+  static String? _date(String title) {
+    final match = RegExp(
+      r'(20[0-9]{2})[年./-](0?[1-9]|1[0-2])[月./-](0?[1-9]|[12][0-9]|3[01])日?',
+    ).firstMatch(title);
+    if (match == null) return null;
+    final year = match.group(1)!;
+    final month = match.group(2)!.padLeft(2, '0');
+    final day = match.group(3)!.padLeft(2, '0');
+    return '$year-$month-$day';
+  }
+
+  static String _edition(String title) {
+    for (final marker in <String>['加更', '纯享', '特别', '番外', '花絮', '先导']) {
+      if (title.contains(marker)) return marker;
+    }
+    return '正片';
+  }
+
+  static int? _episodeNumber(String title) {
+    final chinese = RegExp(r'第\s*0*([0-9]{1,4})\s*[集话期]').firstMatch(title);
+    if (chinese != null) return int.tryParse(chinese.group(1)!);
+    final bare = RegExp(r'^\s*0*([0-9]{1,4})\s*$').firstMatch(title);
+    if (bare != null) return int.tryParse(bare.group(1)!);
+    final english = RegExp(
+      r'(?:^|[\s_.-])(?:ep|episode|e)\s*0*([0-9]{1,4})(?:\b|$)',
+      caseSensitive: false,
+    ).firstMatch(title);
+    return english == null ? null : int.tryParse(english.group(1)!);
+  }
+
+  /// Only bind a confidently identified episode. A numeric position in an
+  /// unordered/variant episode list is not a reliable episode identity.
+  static int? selectEpisodeId(
+    List<DanmakuEpisode> entries,
+    int episode, {
+    String episodeTitle = '',
+  }) {
+    if (episode < 1 || entries.isEmpty) return null;
+    final requestedEdition = _edition(episodeTitle);
+    final requestedDate = _date(episodeTitle);
+    final matches = entries.where((entry) {
+      if (_edition(entry.episodeTitle) != requestedEdition) return false;
+      if (requestedDate != null) return _date(entry.episodeTitle) == requestedDate;
+      return _episodeNumber(entry.episodeTitle) == episode;
+    }).toList();
+    if (matches.length == 1) return matches.single.episodeId;
+    if (matches.isNotEmpty || requestedDate != null) return null;
+    // A movie or a genuinely single-part work has an unambiguous lone entry.
+    if (episode == 1 && entries.length == 1 &&
+        _edition(entries.single.episodeTitle) == requestedEdition &&
+        _episodeNumber(entries.single.episodeTitle) == null) {
+      return entries.single.episodeId;
+    }
+    return null;
+  }
+
+  static Future<List<DanmakuEntry>> fetchBilibili(
+      BilibiliVideoRef video) async {
+    final view = await DioFactory.apiDio.get(
+      'https://api.bilibili.com/x/web-interface/view',
+      queryParameters: video.viewParams,
+      options: Options(headers: {'referer': 'https://www.bilibili.com/'}),
+    ).timeout(const Duration(seconds: 10));
+    final json = view.data;
+    if (json is! Map || json['code'] != 0 || json['data'] is! Map) return [];
+    final data = json['data'] as Map;
+    final rawPages = data['pages'];
+    int? cid;
+    if (rawPages is List) {
+      if (video.page > rawPages.length) return [];
+      final requested = rawPages[video.page - 1];
+      if (requested is Map) cid = (requested['cid'] as num?)?.toInt();
+    } else if (video.page == 1) {
+      cid = (data['cid'] as num?)?.toInt();
+    }
+    if (cid == null || cid <= 0) return [];
+    final response = await DioFactory.apiDio.get(
+      'https://comment.bilibili.com/$cid.xml',
+      options: Options(
+        responseType: ResponseType.plain,
+        headers: {'referer': 'https://www.bilibili.com/'},
+      ),
+    ).timeout(const Duration(seconds: 10));
+    return parseBilibiliXml(response.data.toString());
+  }
+
+  /// Bilibili uses time,mode,font,color,...; DanDanPlay uses another layout.
+  static List<DanmakuEntry> parseBilibiliXml(String xml) {
+    final parsed = html_parser.parse(xml);
+    final entries = <DanmakuEntry>[];
+    for (final element in parsed.querySelectorAll('d[p]')) {
+      final parts = (element.attributes['p'] ?? '').split(',');
+      if (parts.length < 4) continue;
+      final time = double.tryParse(parts[0]);
+      final mode = int.tryParse(parts[1]);
+      final rgb = int.tryParse(parts[3]);
+      if (time == null || !time.isFinite || time < 0 ||
+          mode == null || rgb == null) {
+        continue;
       }
+      // Do not run unsupported advanced or reverse modes as ordinary text.
+      if (mode != 1 && mode != 4 && mode != 5) continue;
+      final message = element.text.trim();
+      if (message.isEmpty) continue;
+      entries.add(DanmakuEntry(
+        message: message,
+        time: time,
+        type: mode,
+        color: generateDanmakuColor(rgb),
+        source: 'BiliBili',
+      ));
+    }
+    return entries;
+  }
+}
+), '',
+          ).trim();
+          matches = titlesMatch(title, base);
+        }
+      }
+      if (matches) unique[candidate.animeId] = candidate;
     }
     return unique.length == 1 ? unique.values.single : null;
   }
