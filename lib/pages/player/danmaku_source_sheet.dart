@@ -428,7 +428,7 @@ class _DanmakuSourceSheetState extends State<_DanmakuSourceSheet> {
           ),
         ),
         if (widget.rememberSelection &&
-            ManualDanmakuLinkStore.lookup(
+            ManualDanmakuLinkStore.lookupWithSource(
                   widget.bangumiId, widget.episodeNumber) != null)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
