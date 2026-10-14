@@ -243,12 +243,19 @@ class MediaDanmakuService {
     if (matches is! List || matches.length != 1) return null;
     final candidate = matches.single;
     if (candidate is! Map) return null;
-    // danmu_api decorates catalogue titles, for example:
-    // 亮剑(2005)【电视剧】from 360. Compare the actual work name without
-    // treating this source metadata as part of the copyrighted title.
+    // danmu_api decorates names like 亮剑(2005)【电视剧】from 360.
+    // Strip only this metadata; never conflate 新亮剑 with 亮剑.
     final remoteTitle = (candidate['animeTitle'] ?? '').toString();
     final undecorated = remoteTitle.replaceFirst(
-      RegExp(r'【[^】]+】from\\s*[A-Za-z0-9_-]+
+      RegExp(r'【[^】]+】from\\s*[A-Za-z0-9_-]+$'), '').trim();
+    final noYear = undecorated.replaceFirst(
+      RegExp(r'[（(](?:19|20)[0-9]{2}[)）]$'), '').trim();
+    final exact = titlesMatch(title, remoteTitle) ||
+        titlesMatch(title, undecorated) ||
+        (!RegExp(r'(?:19|20)[0-9]{2}').hasMatch(title) &&
+            titlesMatch(title, noYear));
+    if (!exact) return null;
+    final label = (candidate['episodeTitle'] ?? '').toString();
     final number = _episodeNumber(label);
     final requestedDate = _date(episodeTitle);
     if (_edition(label) != _edition(episodeTitle) ||
