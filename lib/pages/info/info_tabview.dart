@@ -41,6 +41,7 @@ class InfoTabView extends StatefulWidget {
     required this.staffList,
     required this.relationList,
     required this.isLoading,
+    this.episodeSection,
   });
 
   final bool commentsQueryTimeout;
@@ -65,6 +66,7 @@ class InfoTabView extends StatefulWidget {
   final List<StaffFullItem> staffList;
   final List<BangumiRelation> relationList;
   final bool isLoading;
+  final Widget? episodeSection;
 
   @override
   State<InfoTabView> createState() => _InfoTabViewState();
@@ -489,7 +491,12 @@ class _InfoTabViewState extends State<InfoTabView> {
                   child: SafeArea(
                     top: false,
                     bottom: false,
-                    child: widget.isLoading ? infoBodyBone : infoBody,
+                    child: Column(
+                      children: [
+                        if (widget.episodeSection != null) widget.episodeSection!,
+                        widget.isLoading ? infoBodyBone : infoBody,
+                      ],
+                    ),
                   ),
                 ),
               ],
