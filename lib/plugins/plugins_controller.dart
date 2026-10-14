@@ -120,8 +120,50 @@ abstract class _PluginsController with Store {
       await newPluginDirectory!.create(recursive: true);
     }
     await _loadAllPlugins();
+    await _ensureBundledKazumiAnimeRules();
     await _migrateBundledPublicVideoRule();
     await _bootstrapDefaultCmsSources();
+  }
+
+  /// On fresh installs and older Suibo upgrades, install the complete
+  /// KazumiRules default anime catalogue shipped with the app. Preserve
+  /// modified rules, saved CMS providers and the user's own sources.
+  /// After this one-time default migration users can remove sources freely.
+  Future<void> _ensureBundledKazumiAnimeRules() async {
+    final directory = newPluginDirectory;
+    if (directory == null) return;
+    final marker = File('${directory.path}/kazumi_all_16_defaults_v1');
+    if (await marker.exists()) return;
+    try {
+      final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+      final paths = manifest.listAssets().where((asset) =>
+          asset.startsWith('assets/plugins/') && asset.endsWith('.json'));
+      final bundled = <Plugin>[];
+      for (final path in paths) {
+        final data = jsonDecode(await rootBundle.loadString(path));
+        final rule = Plugin.fromJson(Map<String, dynamic>.from(data as Map));
+        if (rule.type.trim().toLowerCase() == 'anime') {
+          bundled.add(rule);
+        }
+      }
+      if (bundled.length < 16) {
+        throw StateError('Incomplete bundled Kazumi rules');
+      }
+      final existing = pluginList.map((p) => pluginNameKey(p.name)).toSet();
+      final missing = bundled.where(
+          (rule) => !existing.contains(pluginNameKey(rule.name))).toList();
+      if (missing.isNotEmpty) {
+        await _mutateAndPersist(() => pluginList.addAll(missing),
+            errorMessage: 'Plugin: failed to install bundled Kazumi rules');
+      }
+      await marker.writeAsString('Kazumi default anime rules installed\n',
+          flush: true);
+      KazumiLogger().i('Kazumi defaults: ${bundled.length} present; '
+          '${missing.length} restored');
+    } catch (error) {
+      KazumiLogger().w('Kazumi defaults: pending retry on next launch',
+          error: error);
+    }
   }
 
   /// One-time, non-destructive upgrade for installations whose existing
