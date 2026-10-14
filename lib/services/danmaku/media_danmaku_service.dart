@@ -544,7 +544,16 @@ class MediaDanmakuService {
       r'(?:^|[\s_.-])(?:ep|episode|e)\s*0*([0-9]{1,4})(?:\b|$)',
       caseSensitive: false,
     ).firstMatch(title);
-    return english == null ? null : int.tryParse(english.group(1)!);
+    if (english != null) return int.tryParse(english.group(1)!);
+    // The verified upstream backend labels some drama chapters as
+    // "【qq】 亮剑_01" instead of "第1集". Only accept a terminal number
+    // separated from the work title, never a year or arbitrary substring.
+    final trimmed = title.trim();
+    final suffix = RegExp(r'[_ .-]0*([1-9][0-9]{0,3})')
+        .allMatches(trimmed)
+        .where((match) => match.end == trimmed.length)
+        .toList();
+    return suffix.length == 1 ? int.tryParse(suffix.single.group(1)!) : null;
   }
 
   /// Only bind a confidently identified episode. A numeric position in an
