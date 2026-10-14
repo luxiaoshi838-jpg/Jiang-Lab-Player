@@ -291,23 +291,34 @@ class MediaDanmakuService {
       String path, Map<String, String> data) async {
     final uri = communityUri(path);
     if (uri == null || uri.scheme != 'https') return null;
+    final legacy = uri.host == 'api.danmu.icu';
     return (await DioFactory.apiDio.postUri(
       uri,
       data: data,
       options: Options(
+        connectTimeout: legacy ? null : const Duration(seconds: 20),
         sendTimeout: const Duration(seconds: 8),
-        receiveTimeout: const Duration(seconds: 8),
+        receiveTimeout: legacy
+            ? const Duration(seconds: 8)
+            : const Duration(seconds: 45),
       ),
-    ).timeout(const Duration(seconds: 10))).data;
+    ).timeout(Duration(seconds: legacy ? 10 : 50))).data;
   }
 
   static Future<dynamic> _communityGet(
       String path, Map<String, String> query) async {
     final uri = communityUri(path, query);
     if (uri == null) return null;
-    return (await DioFactory.apiDio.getUri(uri,
-      options: Options(receiveTimeout: const Duration(seconds: 8)),
-    ).timeout(const Duration(seconds: 10))).data;
+    final legacy = uri.host == 'api.danmu.icu';
+    return (await DioFactory.apiDio.getUri(
+      uri,
+      options: Options(
+        connectTimeout: legacy ? null : const Duration(seconds: 20),
+        receiveTimeout: legacy
+            ? const Duration(seconds: 8)
+            : const Duration(seconds: 45),
+      ),
+    ).timeout(Duration(seconds: legacy ? 10 : 50))).data;
   }
 
   /// The public danmu.icu service matches official pages and selected
