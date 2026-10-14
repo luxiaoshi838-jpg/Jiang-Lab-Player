@@ -10,6 +10,7 @@ jobs:
     env:
       DANDANAPI_APPID: ${{ secrets.DANDANAPI_APPID }}
       DANDANAPI_KEY: ${{ secrets.DANDANAPI_KEY }}
+      SUIBO_DANMU_API_URL: ${{ secrets.SUIBO_DANMU_API_URL }}
     timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
@@ -29,9 +30,10 @@ jobs:
       - name: Build installable Windows setup
         shell: pwsh
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:DANDANAPI_APPID) -or
-              [string]::IsNullOrWhiteSpace($env:DANDANAPI_KEY)) {
-            throw "MISSING_DANDANPLAY_APP_CREDENTIALS: refuse to package an app without anime danmaku"
+          if (([string]::IsNullOrWhiteSpace($env:DANDANAPI_APPID) -or
+               [string]::IsNullOrWhiteSpace($env:DANDANAPI_KEY)) -and
+              [string]::IsNullOrWhiteSpace($env:SUIBO_DANMU_API_URL)) {
+            throw "NO_DANMAKU_PROVIDER: require official credentials or a public danmu_api service"
           }
           $out = Join-Path $env:RUNNER_TEMP "suibo-delivery"
           flutter pub get
@@ -59,6 +61,7 @@ jobs:
     env:
       DANDANAPI_APPID: ${{ secrets.DANDANAPI_APPID }}
       DANDANAPI_KEY: ${{ secrets.DANDANAPI_KEY }}
+      SUIBO_DANMU_API_URL: ${{ secrets.SUIBO_DANMU_API_URL }}
     timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
@@ -85,13 +88,13 @@ jobs:
           EOF
       - name: Build universal release APK for private re-signing
         run: |
-          if [[ -z "$DANDANAPI_APPID" || -z "$DANDANAPI_KEY" ]]; then
-            echo "::error::MISSING_DANDANPLAY_APP_CREDENTIALS: refuse to package a broken anime danmaku client"
+          if [[ ( -z "$DANDANAPI_APPID" || -z "$DANDANAPI_KEY" ) && -z "$SUIBO_DANMU_API_URL" ]]; then
+            echo "::error::NO_DANMAKU_PROVIDER: supply official credentials or an approved public danmu_api service"
             exit 1
           fi
           flutter pub get
           dart run flutter_launcher_icons
-          flutter build apk --release --dart-define=DANDANAPI_APPID=$DANDANAPI_APPID --dart-define=DANDANAPI_KEY=$DANDANAPI_KEY
+          flutter build apk --release --dart-define=DANDANAPI_APPID="$DANDANAPI_APPID" --dart-define=DANDANAPI_KEY="$DANDANAPI_KEY" --dart-define=SUIBO_DANMU_API_URL="$SUIBO_DANMU_API_URL"
           mkdir -p "$RUNNER_TEMP/suibo-apk-stage"
           cp build/app/outputs/flutter-apk/app-release.apk "$RUNNER_TEMP/suibo-apk-stage/REQUIRES-PRIVATE-RESIGN.apk"
           jarpath=$(find "$ANDROID_HOME/build-tools" -path "*/lib/apksigner.jar" | sort -V | tail -n 1)

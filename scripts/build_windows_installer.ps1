@@ -39,6 +39,13 @@ if (-not $SkipFlutterBuild) {
         $buildArgs += @("--dart-define=DANDANAPI_APPID=$env:DANDANAPI_APPID",
                         "--dart-define=DANDANAPI_KEY=$env:DANDANAPI_KEY")
     }
+    if (-not [string]::IsNullOrWhiteSpace($env:SUIBO_DANMU_API_URL)) {
+        $uri = [Uri]$env:SUIBO_DANMU_API_URL
+        if ($uri.Scheme -ne "https" -or [string]::IsNullOrWhiteSpace($uri.Host)) {
+            throw "Invalid public danmu_api HTTPS service URL"
+        }
+        $buildArgs += @("--dart-define=SUIBO_DANMU_API_URL=$env:SUIBO_DANMU_API_URL")
+    }
     & flutter @buildArgs
     if ($LASTEXITCODE -ne 0) { throw "Flutter Windows release build failed" }
 }
