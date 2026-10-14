@@ -1,0 +1,103 @@
+name: Suibo 2.3.14 encrypted candidate installers
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  windows-candidate:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+          cache: true
+      - name: Install tooling
+        shell: pwsh
+        run: |
+          python -m pip install cryptography
+          $compiler = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $compiler)) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "Inno Setup unavailable" }
+          }
+      - name: Create Windows candidate outside repository
+        shell: pwsh
+        run: |
+          flutter pub get
+          if ($LASTEXITCODE -ne 0) { throw "Flutter packages unavailable" }
+          dart run flutter_launcher_icons
+          if ($LASTEXITCODE -ne 0) { throw "Windows icon generation failed" }
+          $out = Join-Path $env:RUNNER_TEMP "suibo-candidate-win"
+          & ./scripts/build_windows_installer.ps1 -OutputDirectory $out
+          if ($LASTEXITCODE -ne 0) { throw "Installer build failed" }
+          $setup = Join-Path $out "Suibo-Setup-2.3.14-Windows-x64.exe"
+          $report = Join-Path $out "Suibo-Windows-install-report-20314.txt"
+          if (-not (Test-Path $setup) -or -not (Test-Path $report)) {
+            throw "Windows binary or report missing"
+          }
+          $zip = Join-Path $env:RUNNER_TEMP "candidate-windows.zip"
+          Compress-Archive -LiteralPath $setup,$report -DestinationPath $zip
+          python scripts/encrypt_temporary_transfer.py --certificate scripts/2.3.14_candidate_transport_cert.pem --input $zip --output "suibo-2.3.14-candidate-windows.enc"
+          if ($LASTEXITCODE -ne 0) { throw "Private transport encryption failed" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: suibo-2.3.14-encrypted-windows-candidate
+          path: suibo-2.3.14-candidate-windows.enc
+          retention-days: 1
+          if-no-files-found: error
+  android-candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+          cache: true
+      - name: Free disk capacity and install encryption
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/share/powershell /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/lib/android/sdk/system-images || true
+          python -m pip install cryptography
+      - name: Temporary build signer only, never use original JKS in CI
+        run: |
+          keytool -genkeypair -noprompt -keystore "$GITHUB_WORKSPACE/android/suibo-ci-candidate.jks" -storepass temporaryTESTonly2026 -keypass temporaryTESTonly2026 -alias temp-ci-only -keyalg RSA -keysize 2048 -validity 2 -dname "CN=Temporary CI Candidate,O=Suibo,C=US"
+          cat > android/key.properties <<EOF
+          storeFile=$GITHUB_WORKSPACE/android/suibo-ci-candidate.jks
+          storePassword=temporaryTESTonly2026
+          keyAlias=temp-ci-only
+          keyPassword=temporaryTESTonly2026
+          EOF
+      - name: Create encrypted Android candidate for private re-sign
+        run: |
+          flutter pub get
+          dart run flutter_launcher_icons
+          flutter build apk --release --target-platform android-arm64
+          mkdir -p "$RUNNER_TEMP/suibo-candidate-android"
+          cp build/app/outputs/flutter-apk/app-release.apk "$RUNNER_TEMP/suibo-candidate-android/REQUIRES-PRIVATE-RESIGN.apk"
+          jarpath=$(find "$ANDROID_HOME/build-tools" -path "*/lib/apksigner.jar" | sort -V | tail -n 1)
+          test -f "$jarpath"
+          cp "$jarpath" "$RUNNER_TEMP/suibo-candidate-android/apksigner.jar"
+          test "$(stat -c '%s' "$RUNNER_TEMP/suibo-candidate-android/REQUIRES-PRIVATE-RESIGN.apk")" -gt 1048576
+          (cd "$RUNNER_TEMP/suibo-candidate-android" && zip "$RUNNER_TEMP/candidate-android.zip" REQUIRES-PRIVATE-RESIGN.apk apksigner.jar)
+          python scripts/encrypt_temporary_transfer.py --certificate scripts/2.3.14_candidate_transport_cert.pem --input "$RUNNER_TEMP/candidate-android.zip" --output suibo-2.3.14-candidate-android.enc
+      - uses: actions/upload-artifact@v4
+        with:
+          name: suibo-2.3.14-encrypted-android-candidate
+          path: suibo-2.3.14-candidate-android.enc
+          retention-days: 1
+          if-no-files-found: error
