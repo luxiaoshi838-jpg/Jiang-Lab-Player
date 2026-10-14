@@ -159,7 +159,7 @@ class MediaDanmakuService {
   /// Override with --dart-define=SUIBO_DANMU_API_URL=https://your-server
   static const String communityDanmakuApi = String.fromEnvironment(
     'SUIBO_DANMU_API_URL',
-    defaultValue: 'https://api.danmu.icu',
+    defaultValue: 'https://suibo-danmaku.onrender.com',
   );
 
   static Uri? communityUri(String path, [Map<String, String>? query]) {
