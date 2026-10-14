@@ -144,7 +144,7 @@ class _ScaffoldMenu extends State<ScaffoldMenu> with RouteAware {
           NavigationDestination(
             selectedIcon: Icon(Icons.home),
             icon: Icon(Icons.home_outlined),
-            label: '推荐',
+            label: '首页',
           ),
           NavigationDestination(
             selectedIcon: Icon(Icons.timeline),
@@ -154,7 +154,7 @@ class _ScaffoldMenu extends State<ScaffoldMenu> with RouteAware {
           NavigationDestination(
             selectedIcon: Icon(Icons.favorite),
             icon: Icon(Icons.favorite_outlined),
-            label: '追番',
+            label: '收藏',
           ),
           NavigationDestination(
             selectedIcon: Icon(Icons.settings),
@@ -192,7 +192,7 @@ class _ScaffoldMenu extends State<ScaffoldMenu> with RouteAware {
                 NavigationRailDestination(
                   selectedIcon: Icon(Icons.home),
                   icon: Icon(Icons.home_outlined),
-                  label: Text('推荐'),
+                  label: Text('首页'),
                 ),
                 NavigationRailDestination(
                   selectedIcon: Icon(Icons.timeline),
@@ -202,7 +202,7 @@ class _ScaffoldMenu extends State<ScaffoldMenu> with RouteAware {
                 NavigationRailDestination(
                   selectedIcon: Icon(Icons.favorite),
                   icon: Icon(Icons.favorite_border),
-                  label: Text('追番'),
+                  label: Text('收藏'),
                 ),
                 NavigationRailDestination(
                   selectedIcon: Icon(Icons.settings),
