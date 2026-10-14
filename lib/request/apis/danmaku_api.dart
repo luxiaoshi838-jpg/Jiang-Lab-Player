@@ -21,53 +21,76 @@ class DanmakuApi {
   }
 
   static Future<DanmakuEpisodeResponse> getDanDanEpisodesByDanDanBangumiID(
-    int bangumiID,
-  ) async {
+    int bangumiID, {
+    bool preferCompatible = false,
+  }) async {
     final path = ApiEndpoints.dandanAPIInfo + bangumiID.toString();
     final endPoint = ApiEndpoints.dandanAPIDomain + path;
-    final jsonData = await _client.get(endPoint);
+    final jsonData = await _client.get(
+      endPoint,
+      preferCompatible: preferCompatible,
+    );
     return DanmakuEpisodeResponse.fromJson(jsonData);
   }
 
-  // v2 episode search avoids the anime search's 25-result cap.
-  // Fetch full episode lists separately; search results can truncate them.
+  // Manual title search first uses Kazumi's official provider, and falls
+  // back to a configured compatible provider. IDs are tagged with their
+  // source so subsequent details/comments stay on that same service.
   static Future<DanmakuSearchResponse> searchAnimes(String title) async {
-    // The same search powers automatic matching and the manual picker.
-    // Keep Kazumi's official search first, then use the documented
-    // compatible title-search endpoint when one was provisioned.
     if (!DanmakuClient.hasOfficialCredentials &&
         !DanmakuClient.hasCompatibleProvider) {
       throw const DanmakuProviderUnavailable();
     }
-    final endPoint =
+    final url =
         ApiEndpoints.dandanAPIDomain + ApiEndpoints.dandanAPISearchEpisodes;
-    Object? primaryFailure;
-    DanmakuSearchResponse? result;
-    try {
-      final jsonData = await _client.get(
-        endPoint,
-        queryParameters: {'anime': title, 'v2': 'true'},
-      );
-      result = DanmakuSearchResponse.fromJson(jsonData);
-      if (result.animes.isNotEmpty) return result;
-    } catch (error) {
-      primaryFailure = error;
-    }
+    Object? lastFailure;
+    DanmakuSearchResponse? empty;
 
-    // danmu_api supports both /search/episodes and /search/anime.
-    // This is not a call to the public URL-only danmu.icu service.
-    if (DanmakuClient.hasCompatibleProvider) {
+    if (DanmakuClient.hasOfficialCredentials) {
       try {
-        final jsonData = await _client.searchCompatibleTitles(title);
-        final alternative = DanmakuSearchResponse.fromJson(jsonData);
-        if (alternative.animes.isNotEmpty) return alternative;
-        result ??= alternative;
+        final data = await _client.get(
+          url,
+          queryParameters: {'anime': title, 'v2': 'true'},
+          officialOnly: true,
+        );
+        final result = DanmakuSearchResponse.fromJson(data);
+        if (result.animes.isNotEmpty) return result;
+        empty = result;
       } catch (error) {
-        primaryFailure ??= error;
+        lastFailure = error;
       }
     }
-    if (result != null) return result;
-    throw primaryFailure ?? StateError('弹幕搜索没有返回有效数据');
+    if (DanmakuClient.hasCompatibleProvider) {
+      try {
+        final data = await _client.searchCompatibleTitles(title);
+        final result = DanmakuSearchResponse.fromJson(
+          data,
+          compatibleProvider: true,
+        );
+        if (result.animes.isNotEmpty) return result;
+        empty ??= result;
+      } catch (error) {
+        lastFailure = error;
+      }
+      // Some compatible deployments only enable the episodes route.
+      try {
+        final data = await _client.get(
+          url,
+          queryParameters: {'anime': title, 'v2': 'true'},
+          preferCompatible: true,
+        );
+        final result = DanmakuSearchResponse.fromJson(
+          data,
+          compatibleProvider: true,
+        );
+        if (result.animes.isNotEmpty) return result;
+        empty ??= result;
+      } catch (error) {
+        lastFailure = error;
+      }
+    }
+    if (empty != null) return empty;
+    throw lastFailure ?? StateError('弹幕搜索服务未返回有效结果');
   }
 
   static Future<List<DanmakuEntry>> getDanDanmaku(
@@ -81,10 +104,18 @@ class DanmakuApi {
     return _getComments('$bangumiID${episode.toString().padLeft(4, '0')}');
   }
 
-  static Future<List<DanmakuEntry>> getDanDanmakuByEpisodeID(int episodeID) =>
-      _getComments(episodeID.toString());
+  static Future<List<DanmakuEntry>> getDanDanmakuByEpisodeID(
+    int episodeID, {
+    bool preferCompatible = false,
+  }) => _getComments(
+    episodeID.toString(),
+    preferCompatible: preferCompatible,
+  );
 
-  static Future<List<DanmakuEntry>> _getComments(String episodeID) async {
+  static Future<List<DanmakuEntry>> _getComments(
+    String episodeID, {
+    bool preferCompatible = false,
+  }) async {
     final endPoint =
         '${ApiEndpoints.dandanAPIDomain}${ApiEndpoints.dandanAPIComment}$episodeID';
     final conversion = DanmakuChConvert.fromValue(
@@ -97,6 +128,7 @@ class DanmakuApi {
         'withRelated': 'true',
         'chConvert': conversion.value.toString(),
       },
+      preferCompatible: preferCompatible,
     );
     final List<dynamic> comments = jsonData['comments'];
     return [for (final comment in comments) DanmakuEntry.fromJson(comment)];
