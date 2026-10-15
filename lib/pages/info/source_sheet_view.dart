@@ -307,12 +307,10 @@ class _SourceSheetViewState extends State<_SourceSheetView> {
                                 ),
                               )),
                               const SizedBox(width: 8),
-                              if (group.qualityLabel != '尚未测试') ...[
-                                Text(group.qualityLabel,
-                                    style: theme.textTheme.labelSmall?.copyWith(
-                                        color: colors.onSurfaceVariant)),
-                                const SizedBox(width: 8),
-                              ],
+                              Text(group.qualityLabel,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                      color: colors.onSurfaceVariant)),
+                              const SizedBox(width: 8),
                               Text(
                                 group.statusLabel,
                                 style: theme.textTheme.labelMedium?.copyWith(

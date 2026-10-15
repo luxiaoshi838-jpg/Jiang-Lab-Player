@@ -66,11 +66,13 @@ class HlsPreloadService {
     if (parsedUrl == null || !VideoSourceFailure.isOnlineMediaUrl(pageUrl)) {
       return;
     }
+    WebViewVideoSourceService? localResolver;
     try {
       var mediaUrl = pageUrl;
       if (directVideoFormat(pageUrl) != VideoSourceFormat.hls) {
         if (directVideoFormat(pageUrl) != null) return;
         final resolver = WebViewVideoSourceService();
+        localResolver = resolver;
         _resolver = resolver;
         final result = await resolver.resolve(pageUrl,
             useLegacyParser: useLegacyParser,
@@ -107,13 +109,12 @@ class HlsPreloadService {
       // A preloading error must never affect current playback.
       KazumiLogger().w('HlsPreloadService: pre-resolution unavailable');
     } finally {
-      final resolver = _resolver;
+      if (identical(_resolver, localResolver)) _resolver = null;
       if (ticket == _generation) {
-        _resolver = null;
         _client?.close();
         _client = null;
       }
-      await resolver?.dispose();
+      await localResolver?.dispose();
     }
   }
 

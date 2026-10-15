@@ -174,11 +174,8 @@ class _VideoPageState extends State<VideoPage>
         if (!mounted || generation != _episodeGeneration || _isExiting) return;
         final selection = videoPageController.playbackEpisode;
         await changeEpisode(selection.episode, currentRoad: selection.road,
-            offset: position, automaticRecovery: true);
-        if (mounted && !_isExiting) {
-          await playerController.setPlaybackSpeed(speed);
-          playerController.danmaku.setDanmakuEnabled(danmakuOn);
-        }
+            offset: position, automaticRecovery: true,
+            recoverySpeed: speed, recoveryDanmaku: danmakuOn);
       }());
     } else if (action == RecoveryAction.switchSource) {
       unawaited(() async {
@@ -201,12 +198,12 @@ class _VideoPageState extends State<VideoPage>
         _recovery.cancel();
         final next = ++_episodeGeneration;
         KazumiDialog.showToast(message: '来源暂时不可用，已找到同集备用来源');
+        _playStartedAt = DateTime.now();
         await videoPageController.playVerifiedAlternative(found,
             offset: position, playerController: playerController);
         if (!mounted || next != _episodeGeneration) return;
         await playerController.setPlaybackSpeed(speed);
         playerController.danmaku.setDanmakuEnabled(danmakuOn);
-        _playStartedAt = DateTime.now();
         _measuredFirstFrame = false;
         _preloadScheduled = false;
         _watchPlayback(next);
@@ -424,7 +421,8 @@ class _VideoPageState extends State<VideoPage>
 
   Future<void> changeEpisode(int episode,
       {int currentRoad = 0, int offset = 0,
-      bool automaticRecovery = false}) async {
+      bool automaticRecovery = false,
+      double? recoverySpeed, bool? recoveryDanmaku}) async {
     if (!mounted || _isExiting) return;
     if (!automaticRecovery) _recovery.cancel();
     _cancelPlaybackObservations();
@@ -439,6 +437,15 @@ class _VideoPageState extends State<VideoPage>
     await videoPageController.changeEpisode(episode,
         currentRoad: currentRoad, offset: offset,
         playerController: playerController);
+    if (!mounted || generation != _episodeGeneration || _isExiting) return;
+    if (automaticRecovery) {
+      if (recoverySpeed != null) {
+        await playerController.setPlaybackSpeed(recoverySpeed);
+      }
+      if (recoveryDanmaku != null) {
+        playerController.danmaku.setDanmakuEnabled(recoveryDanmaku);
+      }
+    }
     if (!mounted || generation != _episodeGeneration || _isExiting) return;
     if (videoPageController.errorMessage != null) {
       final message = videoPageController.errorMessage!;

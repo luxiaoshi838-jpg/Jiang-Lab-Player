@@ -246,6 +246,7 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
             );
       if (roads.isEmpty) throw ChapterErrorException(plugin.name);
       _health.recordPlaylist(name, success: true, latency: clock.elapsed);
+      _health.preferManual(widget.infoController.bangumiItem.id, name);
       task.withContext((context) {
         final onSelected = widget.onSourceSelected;
         if (onSelected != null) {
@@ -330,8 +331,10 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
           final smart = GStorage.getSetting(SettingsKeys.smartPlayback);
           if (smart) {
             final workId = widget.infoController.bangumiItem.id;
-            groups.sort((a, b) =>
-                _health.compare(a.name, b.name, workId: workId));
+            groups.sort((a, b) {
+              if (a.hasResults != b.hasResults) return a.hasResults ? -1 : 1;
+              return _health.compare(a.name, b.name, workId: workId);
+            });
           }
           return _SourceSheetView(
             keyword: _keyword,
