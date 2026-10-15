@@ -236,6 +236,7 @@ class _VideoPageState extends State<VideoPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
     if (!_foreground) {
+      videoPageController.cancelNextEpisodePreload();
       // No new mobile preloads in the background; active preparation observes
       // allowed() and stops without touching the mpv current-episode cache.
       _preloadScheduled = false;

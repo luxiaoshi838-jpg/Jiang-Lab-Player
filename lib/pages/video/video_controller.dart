@@ -811,6 +811,7 @@ abstract class _VideoPageController with Store implements Disposable {
         );
         unawaited(_loadPlaybackDanmaku(playerController, params, session));
       } else if (session.isActive) {
+        _failLoading('播放器初始化失败，请更换来源');
         _playbackSessions.cancel();
       }
     } on VideoSourceTimeoutException {
@@ -827,6 +828,8 @@ abstract class _VideoPageController with Store implements Disposable {
       _failLoading(VideoSourceFailure.stream(e));
     }
   }
+
+  void cancelNextEpisodePreload() => _hlsPreload.cancel();
 
   /// Only pre-resolve the *explicit* next episode, not an arbitrary next row.
   Future<void> preloadNextEpisode({

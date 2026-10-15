@@ -121,7 +121,9 @@ class SourceHealthService extends ChangeNotifier {
     final startupPenalty = r.firstFrameMs > 0
         ? (r.firstFrameMs / 20000).clamp(0.0, 0.25).toDouble() : 0.0;
     final bufferPenalty = (r.buffers / (r.starts + 2) / 10).clamp(0.0, 0.2).toDouble();
-    return reliability - startupPenalty - bufferPenalty -
+    final bufferTimePenalty = (r.bufferMs / (r.starts + 2) / 120000)
+        .clamp(0.0, 0.15).toDouble();
+    return reliability - startupPenalty - bufferPenalty - bufferTimePenalty -
         (isCoolingDown(plugin) ? 0.25 : 0.0);
   }
 
