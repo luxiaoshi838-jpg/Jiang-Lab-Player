@@ -114,8 +114,8 @@ class SourceHealthService extends ChangeNotifier {
     }
     final reliability = (r.starts + 2) / (observations + 4);
     final startupPenalty = r.firstFrameMs > 0
-        ? (r.firstFrameMs / 20000).clamp(0.0, 0.25) : 0.0;
-    final bufferPenalty = (r.buffers / (r.starts + 2) / 10).clamp(0.0, 0.2);
+        ? (r.firstFrameMs / 20000).clamp(0.0, 0.25).toDouble() : 0.0;
+    final bufferPenalty = (r.buffers / (r.starts + 2) / 10).clamp(0.0, 0.2).toDouble();
     return reliability - startupPenalty - bufferPenalty -
         (isCoolingDown(plugin) ? 0.25 : 0.0);
   }
@@ -166,7 +166,7 @@ class _SourceMetrics {
 
   factory _SourceMetrics.fromJson(Map<String, dynamic> raw) {
     final value = _SourceMetrics();
-    int readInt(String key) => (raw[key] is num) ? (raw[key] as num).toInt().clamp(0, 10000000000000) : 0;
+    int readInt(String key) => (raw[key] is num) ? (raw[key] as num).toInt().clamp(0, 10000000000000).toInt() : 0;
     value.searches = readInt('s');
     value.searchHits = readInt('sh');
     value.playlists = readInt('p');
@@ -176,7 +176,7 @@ class _SourceMetrics {
     value.buffers = readInt('b');
     value.bufferMs = readInt('bm');
     value.lastFailureMs = readInt('lf');
-    value.firstFrameMs = (raw['ff'] is num) ? (raw['ff'] as num).toDouble().clamp(0.0, 1e8) : 0;
+    value.firstFrameMs = (raw['ff'] is num) ? (raw['ff'] as num).toDouble().clamp(0.0, 1e8).toDouble() : 0;
     return value;
   }
 
