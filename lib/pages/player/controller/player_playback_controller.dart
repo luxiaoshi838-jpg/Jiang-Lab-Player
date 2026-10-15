@@ -292,7 +292,14 @@ abstract class _PlayerPlaybackController with Store {
     if (!canInstall()) {
       return null;
     }
-    await PlayerVideoCacheService.prepare();
+    try {
+      await PlayerVideoCacheService.prepare();
+    } catch (error) {
+      // A failed cache cleanup must not prevent normal mpv playback.
+      KazumiLogger().w(
+          'PlayerPlaybackController: optional cache cleanup unavailable',
+          error: error);
+    }
     if (!canInstall()) {
       return null;
     }
