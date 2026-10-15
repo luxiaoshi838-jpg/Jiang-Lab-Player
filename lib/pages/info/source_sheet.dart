@@ -315,7 +315,6 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
               ),
           };
           final seenBySource = <String, Set<String>>{};
-          String? firstResultSource;
           // Responses follow completion order; groups keep configured order.
           for (final response
               in widget.infoController.pluginSearchResponseList) {
@@ -325,7 +324,6 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
             for (final result in response.data) {
               if (seen.add(result.src)) group.results.add(result);
             }
-            if (group.hasResults) firstResultSource ??= group.name;
           }
           final groups = groupsByName.values.toList();
           final smart = GStorage.getSetting(SettingsKeys.smartPlayback);
@@ -341,7 +339,8 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
             groups: groups,
             hiddenAnimeCount: _hiddenAnimeCount,
             onSearchAnimeRules: _showAndSearchAnimeRules,
-            firstResultSource: firstResultSource,
+            firstResultSource: groups.where((g) => g.hasResults).isEmpty
+                ? null : groups.firstWhere((g) => g.hasResults).name,
             onSourceSearch: _showCustomKeyword,
             onSourceAliasSearch: _showAliasPicker,
             onRetry: _retry,

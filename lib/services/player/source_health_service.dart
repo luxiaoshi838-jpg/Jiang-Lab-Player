@@ -52,6 +52,7 @@ class SourceHealthService extends ChangeNotifier {
     final r = _of(plugin);
     r.searches += 1;
     if (success) r.searchHits += 1;
+    r.lastActivityMs = DateTime.now().millisecondsSinceEpoch;
     _notifyAndSave();
   }
 
@@ -59,6 +60,7 @@ class SourceHealthService extends ChangeNotifier {
     final r = _of(plugin);
     r.playlists += 1;
     if (success) r.playlistHits += 1;
+    r.lastActivityMs = DateTime.now().millisecondsSinceEpoch;
     _notifyAndSave();
   }
 
@@ -70,6 +72,7 @@ class SourceHealthService extends ChangeNotifier {
         ? firstFrame.inMilliseconds.toDouble()
         : r.firstFrameMs * 0.75 + firstFrame.inMilliseconds * 0.25;
     r.lastFailureMs = 0;
+    r.lastActivityMs = DateTime.now().millisecondsSinceEpoch;
     _notifyAndSave();
   }
 
@@ -78,6 +81,7 @@ class SourceHealthService extends ChangeNotifier {
     final r = _of(plugin);
     r.buffers += 1;
     r.bufferMs += duration.inMilliseconds;
+    r.lastActivityMs = DateTime.now().millisecondsSinceEpoch;
     _notifyAndSave();
   }
 
@@ -86,6 +90,7 @@ class SourceHealthService extends ChangeNotifier {
     final r = _of(plugin);
     r.failures += 1;
     r.lastFailureMs = DateTime.now().millisecondsSinceEpoch;
+    r.lastActivityMs = r.lastFailureMs;
     _notifyAndSave();
   }
 
@@ -162,7 +167,8 @@ class _SourceMetrics {
   int starts = 0, failures = 0, buffers = 0, bufferMs = 0;
   int lastFailureMs = 0;
   double firstFrameMs = 0;
-  int get lastActivity => lastFailureMs;
+  int lastActivityMs = 0;
+  int get lastActivity => lastActivityMs;
 
   factory _SourceMetrics.fromJson(Map<String, dynamic> raw) {
     final value = _SourceMetrics();
@@ -176,6 +182,7 @@ class _SourceMetrics {
     value.buffers = readInt('b');
     value.bufferMs = readInt('bm');
     value.lastFailureMs = readInt('lf');
+    value.lastActivityMs = readInt('la');
     value.firstFrameMs = (raw['ff'] is num) ? (raw['ff'] as num).toDouble().clamp(0.0, 1e8).toDouble() : 0;
     return value;
   }
@@ -184,6 +191,7 @@ class _SourceMetrics {
     's': searches, 'sh': searchHits, 'p': playlists,
     'ph': playlistHits, 'st': starts, 'f': failures,
     'b': buffers, 'bm': bufferMs, 'lf': lastFailureMs,
+    'la': lastActivityMs,
     'ff': firstFrameMs,
   };
 }

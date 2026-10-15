@@ -31,7 +31,7 @@ class PlaybackRecoveryService {
     if (text.contains('404') || text.contains('403') ||
         text.contains('410') || text.contains('not found') ||
         text.contains('http error 5') ||
-        text.contains('failed to open')) {
+        text.contains('failed to open') || text.contains('source unavailable')) {
       return PlaybackFailure.sourceUnavailable;
     }
     if (text.contains('timeout') || text.contains('timed out') ||
@@ -68,5 +68,5 @@ class PlaybackRecoveryService {
     }
   }
 
-  Duration get delay => retryDelays[(_attempts - 1).clamp(0, maxRetries - 1)];
+  Duration get delay => retryDelays[(_attempts - 1).clamp(0, maxRetries - 1).toInt()];
 }
