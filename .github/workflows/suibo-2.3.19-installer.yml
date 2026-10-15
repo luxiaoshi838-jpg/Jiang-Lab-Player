@@ -99,6 +99,9 @@ jobs:
           fi
           test -f "$apk"
           cp "$apk" "$RUNNER_TEMP/suibo2319-unsigned/REQUIRES-ORIGINAL-DRIVE-KEY-SIGNING.apk"
+          jarpath="$(find "$ANDROID_HOME/build-tools" -path '*/lib/apksigner.jar' -type f | sort -V | tail -n 1)"
+          test -n "$jarpath" && test -f "$jarpath"
+          cp "$jarpath" "$RUNNER_TEMP/suibo2319-unsigned/apksigner.jar"
           sha256sum "$RUNNER_TEMP/suibo2319-unsigned/"*.apk > "$RUNNER_TEMP/suibo2319-unsigned/SHA256.txt"
           printf 'NOT A USER INSTALLABLE UPGRADE. Requires original Google Drive signing key.\n' > "$RUNNER_TEMP/suibo2319-unsigned/READ-ME-FIRST.txt"
           echo "SUIBO_UNSIGNED_DIR=$RUNNER_TEMP/suibo2319-unsigned" >> "$GITHUB_ENV"
