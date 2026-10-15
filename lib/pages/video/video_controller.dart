@@ -866,7 +866,7 @@ abstract class _VideoPageController with Store implements Disposable {
         nextNumber != currentNumber + 1) {
       return;
     }
-    final url = normalizeEpisodeUrl(currentPlugin.baseUrl, next.pageUrl);
+    final url = normalizeEpisodeUrl(currentPlugin.baseUrl, next!.pageUrl);
     await _hlsPreload.prepare(
       pageUrl: url,
       useLegacyParser: currentPlugin.useLegacyParser,
