@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:io';
+
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 import 'package:canvas_danmaku/models/danmaku_content_item.dart';
 import 'package:flutter/material.dart';
@@ -27,6 +30,11 @@ import 'package:kazumi/pages/video/video_page_layout.dart';
 import 'package:kazumi/pages/video/video_side_panel.dart';
 import 'package:kazumi/pages/video/video_system_bars.dart';
 import 'package:kazumi/services/player/pip_utils.dart';
+import 'package:kazumi/services/player/playback_recovery_service.dart';
+import 'package:kazumi/services/player/source_health_service.dart';
+import 'package:kazumi/services/network/metered_network_service.dart';
+import 'package:kazumi/services/plugin/rule_engine_models.dart' show RuleCancelToken;
+import 'package:kazumi/bean/dialog/dialog_helper.dart';
 import 'package:kazumi/services/player/timed_shutdown_service.dart';
 import 'package:kazumi/services/storage/storage.dart';
 import 'package:kazumi/utils/device.dart';
@@ -52,7 +60,7 @@ class VideoPage extends StatefulWidget {
 }
 
 class _VideoPageState extends State<VideoPage>
-    with SingleTickerProviderStateMixin, WindowListener {
+    with SingleTickerProviderStateMixin, WindowListener, WidgetsBindingObserver {
   PlayerController get playerController => widget.playerController;
   VideoPageController get videoPageController => widget.videoPageController;
   bool _didInitializePlayback = false;
@@ -63,6 +71,222 @@ class _VideoPageState extends State<VideoPage>
   bool showDebugLog = false;
   List<String> webviewLogLines = [];
   StreamSubscription<String>? _logSubscription;
+  final PlaybackRecoveryService _recovery = PlaybackRecoveryService();
+  final List<StreamSubscription<dynamic>> _playbackObservations = [];
+  RuleCancelToken? _alternativeLookup;
+  Timer? _stalledBuffer;
+  DateTime? _bufferSince;
+  DateTime? _playStartedAt;
+  bool _measuredFirstFrame = false;
+  bool _preloadScheduled = false;
+  bool _recoveryScheduled = false;
+  bool _foreground = true;
+  int _episodeGeneration = 0;
+
+  void _cancelPlaybackObservations() {
+    _stalledBuffer?.cancel();
+    _stalledBuffer = null;
+    _bufferSince = null;
+    for (final item in _playbackObservations) {
+      unawaited(item.cancel());
+    }
+    _playbackObservations.clear();
+    _alternativeLookup?.cancel();
+    _alternativeLookup = null;
+  }
+
+  bool get _preloadAllowed =>
+      mounted && !_isExiting && _foreground &&
+      !videoPageController.isOfflineMode &&
+      GStorage.getSetting(SettingsKeys.nextEpisodePreload) &&
+      !MeteredNetworkService.isMetered;
+
+  void _watchPlayback(int generation) {
+    final media = playerController.playback.mediaPlayer;
+    if (media == null || !mounted) return;
+    final pluginName = videoPageController.currentPlugin.name;
+    bool active() => mounted && !_isExiting &&
+        generation == _episodeGeneration &&
+        identical(media, playerController.playback.mediaPlayer);
+    void recordReady({required bool hasVideo}) {
+      if (!active() || _measuredFirstFrame || !hasVideo) return;
+      _measuredFirstFrame = true;
+      final since = _playStartedAt;
+      if (since != null) {
+        // Decoder video parameters are a startup proxy, not proof of
+        // the first frame being presented on the screen.
+        SourceHealthService.instance.recordPlaybackStart(
+            pluginName, DateTime.now().difference(since));
+      }
+    }
+
+    // player.open may emit videoParams before this view attaches listeners.
+    final initial = media.state.videoParams;
+    recordReady(hasVideo: (initial.w ?? 0) > 0 && (initial.h ?? 0) > 0);
+    _playbackObservations.add(media.stream.videoParams.listen((params) {
+      recordReady(hasVideo: (params.w ?? 0) > 0 && (params.h ?? 0) > 0);
+    }));
+    _playbackObservations.add(media.stream.error.listen((error) {
+      if (!active()) return;
+      SourceHealthService.instance.recordFailure(pluginName);
+      _handlePlaybackFailure(error, generation);
+    }));
+    _playbackObservations.add(media.stream.buffering.listen((buffering) {
+      if (!active() || !_measuredFirstFrame) return;
+      if (buffering) {
+        if (_bufferSince != null) return;
+        _bufferSince = DateTime.now();
+        _stalledBuffer?.cancel();
+        _stalledBuffer = Timer(const Duration(seconds: 20), () {
+          if (active() && _bufferSince != null &&
+              !playerController.playback.playerCompleted &&
+              playerController.playback.playerPlaying) {
+            SourceHealthService.instance.recordFailure(pluginName);
+            _handlePlaybackFailure(
+                StateError('network timeout during prolonged buffering'),
+                generation);
+          }
+        });
+      } else {
+        _stalledBuffer?.cancel();
+        _stalledBuffer = null;
+        final since = _bufferSince;
+        _bufferSince = null;
+        if (since != null) {
+          SourceHealthService.instance.recordBuffering(
+              pluginName, DateTime.now().difference(since));
+        }
+      }
+    }));
+    _playbackObservations.add(media.stream.position.listen((position) {
+      if (!active() || !_preloadAllowed || _preloadScheduled) return;
+      final duration = playerController.playback.playerDuration;
+      if (duration <= const Duration(minutes: 3) ||
+          position < const Duration(seconds: 30) ||
+          duration - position > const Duration(seconds: 90)) {
+        return;
+      }
+      _preloadScheduled = true;
+      unawaited(_tryPreloadNextEpisode(active));
+    }));
+  }
+
+  Future<void> _tryPreloadNextEpisode(bool Function() active) async {
+    if (!active() || !_preloadAllowed) return;
+    if (Platform.isAndroid) {
+      // A stale 'unmetered' reading must never start mobile-data preloads.
+      try {
+        final transports = await Connectivity().checkConnectivity();
+        if (!transports.contains(ConnectivityResult.wifi) &&
+            !transports.contains(ConnectivityResult.ethernet)) {
+          return;
+        }
+      } catch (_) {
+        return;
+      }
+    }
+    if (!active() || !_preloadAllowed) return;
+    await videoPageController.preloadNextEpisode(
+        allowed: () => active() && _preloadAllowed);
+  }
+
+  void _handlePlaybackFailure(Object error, int generation) {
+    if (!mounted || _isExiting || generation != _episodeGeneration ||
+        _recoveryScheduled || videoPageController.isOfflineMode ||
+        !GStorage.getSetting(SettingsKeys.smartPlayback)) {
+      return;
+    }
+    final action = _recovery.choose(error);
+    if (action == RecoveryAction.stop) return;
+    _recoveryScheduled = true;
+    final position = playerController.playback.playerPosition.inSeconds;
+    final speed = playerController.playback.playerSpeed;
+    final danmakuOn = playerController.danmaku.danmakuOn;
+    if (action == RecoveryAction.retry) {
+      final delay = _recovery.delay;
+      KazumiDialog.showToast(message: '网络异常，正在尝试恢复播放');
+      unawaited(() async {
+        try {
+          await Future.delayed(delay);
+          if (!mounted || generation != _episodeGeneration || _isExiting) return;
+          final selection = videoPageController.playbackEpisode;
+          await changeEpisode(selection.episode, currentRoad: selection.road,
+              offset: position, automaticRecovery: true,
+              recoverySpeed: speed, recoveryDanmaku: danmakuOn);
+        } catch (error) {
+          if (mounted && !_isExiting) {
+            KazumiDialog.showToast(message: '自动恢复失败，请手动重试或更换来源');
+          }
+        } finally {
+          // An old retry must never reset the recovery lock for a newer episode.
+          if (mounted && generation == _episodeGeneration) {
+            _recoveryScheduled = false;
+          }
+        }
+      }());
+    } else if (action == RecoveryAction.switchSource) {
+      unawaited(() async {
+        final token = RuleCancelToken();
+        try {
+        _alternativeLookup?.cancel();
+        _alternativeLookup = token;
+        final found = await videoPageController.findVerifiedAlternative(
+          allowed: () => mounted && !_isExiting &&
+              generation == _episodeGeneration && !token.isCancelled,
+          cancelToken: token,
+        );
+        if (found == null || !mounted || generation != _episodeGeneration ||
+            token.isCancelled) {
+          if (mounted && generation == _episodeGeneration) {
+            KazumiDialog.showToast(message: '未找到确认同集数的备用来源，请手动切换');
+          }
+          return;
+        }
+        _cancelPlaybackObservations();
+        final next = ++_episodeGeneration;
+        KazumiDialog.showToast(message: '来源暂时不可用，已找到同集备用来源');
+        _playStartedAt = DateTime.now();
+        await videoPageController.playVerifiedAlternative(found,
+            offset: position, playerController: playerController);
+        if (!mounted || next != _episodeGeneration) return;
+        await playerController.setPlaybackSpeed(speed);
+        playerController.danmaku.setDanmakuEnabled(danmakuOn);
+        _measuredFirstFrame = false;
+        _preloadScheduled = false;
+        _recoveryScheduled = false;
+        if (videoPageController.errorMessage == null) {
+          _watchPlayback(next);
+        } else {
+          SourceHealthService.instance.recordFailure(found.plugin.name);
+          KazumiDialog.showToast(message: '备用来源未能播放，请手动选择其他来源');
+        }
+        } catch (error) {
+          if (mounted && !_isExiting && !token.isCancelled) {
+            KazumiDialog.showToast(message: '换源失败，请手动选择其他来源');
+          }
+        } finally {
+          if (identical(_alternativeLookup, token)) {
+            _alternativeLookup = null;
+          }
+          if (mounted && generation == _episodeGeneration) {
+            _recoveryScheduled = false;
+          }
+        }
+      }());
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    if (!_foreground) {
+      videoPageController.cancelNextEpisodePreload();
+      // No new mobile preloads in the background; active preparation observes
+      // allowed() and stops without touching the mpv current-episode cache.
+      _preloadScheduled = false;
+    }
+  }
+
   final FocusNode keyboardFocus =
       FocusNode(debugLabel: 'Video player shortcut scope');
 
@@ -82,6 +306,7 @@ class _VideoPageState extends State<VideoPage>
   void initState() {
     super.initState();
     videoPageController.applyPlaybackArgs(widget.args);
+    WidgetsBinding.instance.addObserver(this);
     windowManager.addListener(this);
 
     tabController = TabController(length: 2, vsync: this);
@@ -216,6 +441,10 @@ class _VideoPageState extends State<VideoPage>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _recovery.cancel();
+    _episodeGeneration++;
+    _cancelPlaybackObservations();
     try {
       windowManager.removeListener(this);
     } catch (_) {}
@@ -257,18 +486,43 @@ class _VideoPageState extends State<VideoPage>
   }
 
   Future<void> changeEpisode(int episode,
-      {int currentRoad = 0, int offset = 0}) async {
-    if (!mounted || _isExiting) {
-      return;
-    }
+      {int currentRoad = 0, int offset = 0,
+      bool automaticRecovery = false,
+      double? recoverySpeed, bool? recoveryDanmaku}) async {
+    if (!mounted || _isExiting) return;
+    if (!automaticRecovery) _recovery.cancel();
+    _cancelPlaybackObservations();
+    final generation = ++_episodeGeneration;
+    _recoveryScheduled = false;
+    _playStartedAt = DateTime.now();
+    _measuredFirstFrame = false;
+    _preloadScheduled = false;
     setState(() {
       webviewLogLines.clear();
       showDebugLog = false;
     });
     await videoPageController.changeEpisode(episode,
-        currentRoad: currentRoad,
-        offset: offset,
+        currentRoad: currentRoad, offset: offset,
         playerController: playerController);
+    if (!mounted || generation != _episodeGeneration || _isExiting) return;
+    if (automaticRecovery) {
+      if (recoverySpeed != null) {
+        await playerController.setPlaybackSpeed(recoverySpeed);
+      }
+      if (recoveryDanmaku != null) {
+        playerController.danmaku.setDanmakuEnabled(recoveryDanmaku);
+      }
+    }
+    if (!mounted || generation != _episodeGeneration || _isExiting) return;
+    if (videoPageController.errorMessage != null) {
+      final message = videoPageController.errorMessage!;
+      SourceHealthService.instance.recordFailure(
+          videoPageController.currentPlugin.name);
+      _handlePlaybackFailure(
+          StateError('source unavailable: $message'), generation);
+      return;
+    }
+    _watchPlayback(generation);
   }
 
   void _revealCurrentEpisode() {

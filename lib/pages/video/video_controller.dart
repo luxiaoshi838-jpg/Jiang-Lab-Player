@@ -3,6 +3,7 @@ import 'package:flutter_modular/flutter_modular.dart';
 import 'package:kazumi/modules/roads/road_module.dart';
 import 'package:kazumi/pages/video/video_playback_args.dart';
 import 'package:kazumi/plugins/plugins.dart';
+import 'package:kazumi/plugins/plugins_controller.dart';
 import 'package:kazumi/pages/history/history_controller.dart';
 import 'package:kazumi/pages/player/player_controller.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
@@ -11,8 +12,12 @@ import 'package:kazumi/modules/history/history_module.dart';
 import 'package:kazumi/repositories/download_repository.dart';
 import 'package:kazumi/services/download/download_manager.dart';
 import 'package:kazumi/services/video_source/video_source_failure.dart';
+import 'package:kazumi/services/video_source/video_source_format.dart';
 import 'package:kazumi/services/video_source/services.dart';
 import 'package:kazumi/services/video_source/direct_video_source.dart';
+import 'package:kazumi/services/player/hls_preload_service.dart';
+import 'package:kazumi/services/player/source_health_service.dart';
+import 'package:kazumi/services/plugin/rule_engine_models.dart' show RuleCancelToken;
 import 'package:kazumi/services/danmaku/media_danmaku_service.dart';
 import 'package:kazumi/services/danmaku/manual_danmaku_link_store.dart';
 import 'package:kazumi/request/apis/danmaku_api.dart';
@@ -36,6 +41,40 @@ import 'package:kazumi/pages/video/video_fullscreen_controller.dart';
 part 'video_controller.g.dart';
 
 class VideoPageController = _VideoPageController with _$VideoPageController;
+
+/// Explicit episode identity for automatic recovery only.
+int? verifiedPlayableEpisodeNumber(String label) {
+  final value = label.trim();
+  if (RegExp(r'^\d{1,3}$').hasMatch(value)) {
+    final n = int.tryParse(value);
+    return n != null && n > 0 ? n : null;
+  }
+  final numbered = RegExp(r'第\s*(\d{1,3})\s*[集话期]')
+      .allMatches(value).toList();
+  if (numbered.length == 1) {
+    final n = int.tryParse(numbered.single.group(1)!);
+    return n != null && n > 0 ? n : null;
+  }
+  final ep = RegExp(r'^(?:EP|E)(\d{1,3})$', caseSensitive: false)
+      .firstMatch(value);
+  final n = ep == null ? null : int.tryParse(ep.group(1)!);
+  return n != null && n > 0 ? n : null;
+}
+
+class VerifiedVideoAlternative {
+  const VerifiedVideoAlternative({
+    required this.plugin,
+    required this.title,
+    required this.src,
+    required this.roads,
+    required this.selection,
+  });
+  final Plugin plugin;
+  final String title;
+  final String src;
+  final List<Road> roads;
+  final VideoEpisodeSelection selection;
+}
 
 class VideoEpisodeSelection {
   const VideoEpisodeSelection({
@@ -120,6 +159,7 @@ abstract class _VideoPageController with Store implements Disposable {
   final AsyncSessionOwner _playbackSessions = AsyncSessionOwner();
   final AsyncSessionOwner _danmakuSessions = AsyncSessionOwner();
   final AsyncSessionOwner _commentSessions = AsyncSessionOwner();
+  final HlsPreloadService _hlsPreload = HlsPreloadService();
 
   @observable
   bool isPip = false;
@@ -437,6 +477,8 @@ abstract class _VideoPageController with Store implements Disposable {
     _danmakuSessions.cancel();
     playerController.danmaku.finishDanmakuLoad();
     _videoSourceService?.cancel();
+    // Invalidate in-flight preloading but preserve a fully verified next-episode result.
+    _hlsPreload.cancel(keepPrepared: true);
 
     await playerController.stop();
     if (session.isStale) {
@@ -477,6 +519,7 @@ abstract class _VideoPageController with Store implements Disposable {
       resolvedEpisode: resolvedEpisode,
       session: session,
       playerController: playerController,
+      preloaded: _hlsPreload.takePrepared(urlItem),
     );
   }
 
@@ -703,6 +746,7 @@ abstract class _VideoPageController with Store implements Disposable {
     required EpisodeRef resolvedEpisode,
     required AsyncSession session,
     required PlayerController playerController,
+    PreparedHlsEpisode? preloaded,
   }) async {
     final directFormat = directVideoFormat(url);
     if (directFormat == null) {
@@ -717,7 +761,14 @@ abstract class _VideoPageController with Store implements Disposable {
 
     try {
       // Direct media URLs do not need the WebView page-extraction step.
-      final source = directFormat == null
+      final source = preloaded != null
+          ? VideoSource(
+              url: preloaded.mediaUrl,
+              offset: offset,
+              type: VideoSourceType.online,
+              format: directVideoFormat(preloaded.mediaUrl) ?? directFormat ?? VideoSourceFormat.hls,
+            )
+          : directFormat == null
           ? await _videoSourceService!.resolve(
               url,
               useLegacyParser: currentPlugin.useLegacyParser,
@@ -779,6 +830,7 @@ abstract class _VideoPageController with Store implements Disposable {
         );
         unawaited(_loadPlaybackDanmaku(playerController, params, session));
       } else if (session.isActive) {
+        _failLoading('播放器初始化失败，请更换来源');
         _playbackSessions.cancel();
       }
     } on VideoSourceTimeoutException {
@@ -794,6 +846,131 @@ abstract class _VideoPageController with Store implements Disposable {
       }
       _failLoading(VideoSourceFailure.stream(e));
     }
+  }
+
+  void cancelNextEpisodePreload() => _hlsPreload.cancel();
+
+  /// Only pre-resolve the *explicit* next episode, not an arbitrary next row.
+  Future<void> preloadNextEpisode({
+    required bool Function() allowed,
+  }) async {
+    if (isOfflineMode || !allowed()) return;
+    final selection = playbackEpisode;
+    final current = _resolveOnlineEpisode(selection.episode, road: selection.road);
+    final next = _resolveOnlineEpisode(selection.episode + 1, road: selection.road);
+    final currentNumber = current == null ? null :
+        verifiedPlayableEpisodeNumber(current.displayTitle);
+    final nextNumber = next == null ? null :
+        verifiedPlayableEpisodeNumber(next.displayTitle);
+    if (currentNumber == null || nextNumber == null ||
+        nextNumber != currentNumber + 1) {
+      return;
+    }
+    final url = normalizeEpisodeUrl(currentPlugin.baseUrl, next!.pageUrl);
+    await _hlsPreload.prepare(
+      pageUrl: url,
+      useLegacyParser: currentPlugin.useLegacyParser,
+      userAgent: currentPlugin.userAgent,
+      referer: currentPlugin.referer,
+      allowed: () => allowed() && playbackEpisode == selection,
+    );
+  }
+
+  /// Find another road or installed plugin only where the episode number is
+  /// explicitly present and identical. List index is NOT an episode identity.
+  Future<VerifiedVideoAlternative?> findVerifiedAlternative({
+    required bool Function() allowed,
+    required RuleCancelToken cancelToken,
+  }) async {
+    if (isOfflineMode || !allowed()) return null;
+    final selected = playbackEpisode;
+    final current = _resolveOnlineEpisode(selected.episode, road: selected.road);
+    final targetNumber = current == null ? null :
+        verifiedPlayableEpisodeNumber(current.displayTitle);
+    if (targetNumber == null) return null;
+    for (var road = 0; road < roadList.length; road++) {
+      if (road == selected.road) continue;
+      final matches = <int>[];
+      for (var i = 0; i < roadList[road].identifier.length; i++) {
+        if (verifiedPlayableEpisodeNumber(roadList[road].identifier[i]) == targetNumber) {
+          matches.add(i);
+        }
+      }
+      if (matches.length == 1 && matches.single < roadList[road].data.length &&
+          roadList[road].data[matches.single] != current!.pageUrl) {
+        return VerifiedVideoAlternative(
+          plugin: currentPlugin, title: title, src: src,
+          roads: roadList.toList(),
+          selection: VideoEpisodeSelection(episode: matches.single + 1, road: road),
+        );
+      }
+    }
+
+    final installed = inject<PluginsController>().pluginList;
+    final candidates = bangumiItem.discoveredSources
+        .where((candidate) => candidate.pluginName != currentPlugin.name)
+        .toList()
+      ..sort((a, b) => SourceHealthService.instance
+          .score(b.pluginName).compareTo(SourceHealthService.instance.score(a.pluginName)));
+    final names = {bangumiItem.name.trim().toLowerCase(),
+      bangumiItem.nameCn.trim().toLowerCase(), title.trim().toLowerCase(),
+      ...bangumiItem.alias.map((e) => e.trim().toLowerCase())};
+    for (final candidate in candidates.take(6)) {
+      if (!allowed() || cancelToken.isCancelled) return null;
+      // Search aggregation may contain fuzzy matches. Never trust the
+      // playlist position or a fuzzy title as proof of episode identity.
+      if (!names.contains(candidate.title.trim().toLowerCase())) continue;
+      Plugin? plugin;
+      for (final item in installed) {
+        if (item.name == candidate.pluginName) {
+          plugin = item;
+          break;
+        }
+      }
+      if (plugin == null || SourceHealthService.instance.isCoolingDown(plugin.name)) continue;
+      try {
+        final roads = directVideoFormat(candidate.url) == null
+            ? await plugin.queryChapterRoads(candidate.url, cancelToken: cancelToken)
+            : <Road>[Road(name: '直接播放',
+                identifier: [candidate.title], data: [candidate.url])];
+        if (!allowed() || cancelToken.isCancelled) return null;
+        final matches = <VideoEpisodeSelection>[];
+        for (var road = 0; road < roads.length; road++) {
+          final r = roads[road];
+          for (var i = 0; i < r.identifier.length && i < r.data.length; i++) {
+            if (verifiedPlayableEpisodeNumber(r.identifier[i]) == targetNumber) {
+              matches.add(VideoEpisodeSelection(episode: i + 1, road: road));
+            }
+          }
+        }
+        if (matches.length == 1) {
+          SourceHealthService.instance.recordPlaylist(plugin.name, success: true);
+          return VerifiedVideoAlternative(plugin: plugin, title: candidate.title,
+              src: candidate.url, roads: roads, selection: matches.single);
+        }
+      } catch (_) {
+        if (!cancelToken.isCancelled) {
+          SourceHealthService.instance.recordPlaylist(candidate.pluginName, success: false);
+        }
+      }
+    }
+    return null;
+  }
+
+  Future<void> playVerifiedAlternative(
+    VerifiedVideoAlternative alternative, {
+    required int offset,
+    required PlayerController playerController,
+  }) async {
+    currentPlugin = alternative.plugin;
+    title = alternative.title;
+    src = alternative.src;
+    roadList
+      ..clear()
+      ..addAll(alternative.roads);
+    await changeEpisode(alternative.selection.episode,
+        currentRoad: alternative.selection.road,
+        offset: offset, playerController: playerController);
   }
 
   void _resetEpisodeComments() {
@@ -871,6 +1048,7 @@ abstract class _VideoPageController with Store implements Disposable {
     _playbackSessions.cancel();
     _danmakuSessions.cancel();
     _commentSessions.cancel();
+    unawaited(_hlsPreload.dispose());
     _logSubscription?.cancel();
     _logSubscription = null;
     if (!_logStreamController.isClosed) {

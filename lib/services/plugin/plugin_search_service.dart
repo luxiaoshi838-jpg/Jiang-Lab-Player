@@ -3,6 +3,7 @@ import 'package:kazumi/pages/info/info_controller.dart';
 import 'package:kazumi/plugins/plugins.dart';
 import 'package:kazumi/plugins/plugins_controller.dart';
 import 'package:kazumi/services/logging/logger.dart';
+import 'package:kazumi/services/player/source_health_service.dart';
 import 'package:kazumi/request/core/network_exception.dart';
 import 'package:kazumi/services/plugin/rule_engine_models.dart';
 import 'package:kazumi/utils/async_session.dart';
@@ -52,6 +53,7 @@ class PluginSearchService {
       infoController.pluginSearchStatus[pluginName] =
           PluginSearchStatus.success;
       pluginsController.validityTracker.markSearchValid(pluginName);
+      SourceHealthService.instance.recordSearch(pluginName, success: result.data.isNotEmpty);
       infoController.pluginSearchResponseList.add(result);
       return true;
     }
@@ -83,6 +85,7 @@ class PluginSearchService {
     final session = _querySessions
         .putIfAbsent(plugin.name, AsyncSessionOwner.new)
         .begin();
+    final clock = Stopwatch()..start();
     try {
       final result = await plugin.queryBangumi(
         keyword,
@@ -96,9 +99,14 @@ class PluginSearchService {
       if (result.data.isNotEmpty) {
         pluginsController.validityTracker.markSearchValid(plugin.name);
       }
+      SourceHealthService.instance.recordSearch(plugin.name,
+          success: result.data.isNotEmpty, latency: clock.elapsed);
       infoController.pluginSearchResponseList.add(result);
     } catch (error) {
       if (_isCancelled || session.isStale) return;
+      if (error is! NoResultException && error is! CaptchaRequiredException) {
+        SourceHealthService.instance.recordSearch(plugin.name, success: false, latency: clock.elapsed);
+      }
       _handleSearchError(plugin, error);
     }
   }

@@ -18,6 +18,8 @@ class _SourceSearchGroup {
   bool get isSearching => status == PluginSearchStatus.pending;
   bool get hasResults => results.isNotEmpty;
 
+  String get qualityLabel => SourceHealthService.instance.label(name);
+
   String get statusLabel {
     if (results.isNotEmpty) return '${results.length} 个结果';
     return switch (status) {
@@ -304,6 +306,10 @@ class _SourceSheetViewState extends State<_SourceSheetView> {
                                   color: colors.onSurfaceVariant,
                                 ),
                               )),
+                              const SizedBox(width: 8),
+                              Text(group.qualityLabel,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                      color: colors.onSurfaceVariant)),
                               const SizedBox(width: 8),
                               Text(
                                 group.statusLabel,

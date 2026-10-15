@@ -1,0 +1,115 @@
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
+
+/// An isolated mpv demuxer temp directory, never general application temp.
+/// Only clear our own files while no owned mpv Player is alive.
+class PlayerVideoCacheService {
+  PlayerVideoCacheService._();
+  static const folderName = 'suibo-mpv-cache';
+  static int _active = 0;
+  static Future<void>? _clearing;
+
+  static void markOpened() => _active++;
+  static void markClosed() {
+    if (_active > 0) {
+      _active--;
+    }
+  }
+
+  static Future<Directory> _directory() async {
+    final temp = await getTemporaryDirectory();
+    final directory = Directory(path.join(temp.path, folderName));
+    await directory.create(recursive: true);
+    return directory;
+  }
+
+  static Future<String> directoryPath() async => (await _directory()).path;
+
+  static Future<void> prepare() async {
+    final pendingClear = _clearing;
+    if (pendingClear != null) {
+      await pendingClear;
+    }
+    if (_active > 0) {
+      return;
+    }
+    final directory = await _directory();
+    final threshold = DateTime.now().subtract(const Duration(days: 7));
+    final candidates = <({File file, DateTime changed, int size})>[];
+    var totalBytes = 0;
+    await for (final entry in directory.list(followLinks: false)) {
+      if (_active > 0) {
+        return;
+      }
+      if (entry is! File) {
+        continue;
+      }
+      try {
+        final modified = await entry.lastModified();
+        if (modified.isBefore(threshold)) {
+          await entry.delete();
+        } else {
+          final size = await entry.length();
+          totalBytes += size;
+          candidates.add((file: entry, changed: modified, size: size));
+        }
+      } catch (_) {
+        // Old-file cleanup never blocks playback.
+      }
+    }
+    // Bound idle mpv disk cache to 256 MiB, trimming down to 192 MiB.
+    if (totalBytes > 256 * 1024 * 1024) {
+      candidates.sort((a, b) => a.changed.compareTo(b.changed));
+      for (final item in candidates) {
+        if (_active > 0 || totalBytes <= 192 * 1024 * 1024) {
+          break;
+        }
+        try {
+          await item.file.delete();
+          totalBytes -= item.size;
+        } catch (_) {}
+      }
+    }
+  }
+
+  static Future<int> size() async {
+    final directory = await _directory();
+    var bytes = 0;
+    await for (final entry in directory.list(followLinks: false)) {
+      if (entry is! File) {
+        continue;
+      }
+      try {
+        bytes += await entry.length();
+      } catch (_) {}
+    }
+    return bytes;
+  }
+
+  static Future<bool> clearIfIdle() async {
+    if (_active > 0 || _clearing != null) {
+      return false;
+    }
+    final task = _clearFiles();
+    _clearing = task;
+    try {
+      await task;
+      return true;
+    } finally {
+      _clearing = null;
+    }
+  }
+
+  static Future<void> _clearFiles() async {
+    final directory = await _directory();
+    await for (final entry in directory.list(followLinks: false)) {
+      if (_active > 0) {
+        return;
+      }
+      if (entry is File) {
+        await entry.delete();
+      }
+    }
+  }
+}

@@ -13,6 +13,7 @@ import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/services/network/proxy_utils.dart';
 import 'package:kazumi/services/network/system_proxy_service.dart';
 import 'package:kazumi/services/player/playback_cache_policy.dart';
+import 'package:kazumi/services/player/player_video_cache_service.dart';
 import 'package:kazumi/services/player/player_error_mapper.dart';
 import 'package:kazumi/services/storage/storage.dart';
 import 'package:kazumi/services/video_source/video_source_format.dart';
@@ -30,7 +31,9 @@ class PlayerPlaybackController = _PlayerPlaybackController
     with _$PlayerPlaybackController;
 
 final class _OwnedPlayer {
-  _OwnedPlayer(this.player);
+  _OwnedPlayer(this.player) {
+    PlayerVideoCacheService.markOpened();
+  }
 
   final Player player;
   Future<void>? _disposeFuture;
@@ -51,6 +54,8 @@ final class _OwnedPlayer {
       try {
         await player.stop();
       } catch (_) {}
+    } finally {
+      PlayerVideoCacheService.markClosed();
     }
   }
 }
@@ -284,6 +289,17 @@ abstract class _PlayerPlaybackController with Store {
     autoPlay = GStorage.getSetting(SettingsKeys.autoPlay);
     playerDebugMode = GStorage.getSetting(SettingsKeys.playerDebugMode);
 
+    if (!canInstall()) {
+      return null;
+    }
+    try {
+      await PlayerVideoCacheService.prepare();
+    } catch (error) {
+      // A failed cache cleanup must not prevent normal mpv playback.
+      KazumiLogger().w(
+          'PlayerPlaybackController: optional cache cleanup unavailable',
+          error: error);
+    }
     if (!canInstall()) {
       return null;
     }

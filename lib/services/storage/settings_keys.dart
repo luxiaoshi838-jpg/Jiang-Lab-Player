@@ -218,6 +218,16 @@ class SettingsKeys {
     'default',
     group: SettingGroup.theme,
   );
+  static const smartPlayback = SettingKey<bool>(
+    'suiboSmartPlayback',
+    true,
+    group: SettingGroup.player,
+  );
+  static const nextEpisodePreload = SettingKey<bool>(
+    'suiboNextEpisodePreload',
+    true,
+    group: SettingGroup.player,
+  );
   static const privateMode = SettingKey<bool>(
     _SettingBoxKey.privateMode,
     false,
@@ -595,6 +605,8 @@ class SettingsKeys {
     themeMode,
     themeColor,
     privateMode,
+    smartPlayback,
+    nextEpisodePreload,
     autoPlay,
     autoPlayNext,
     playResume,

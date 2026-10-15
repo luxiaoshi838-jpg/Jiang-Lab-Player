@@ -5,6 +5,7 @@ import 'package:kazumi/bean/dialog/dialog_helper.dart';
 import 'package:kazumi/bean/settings/settings_detail_scaffold.dart';
 import 'package:kazumi/bean/settings/settings_list.dart';
 import 'package:kazumi/services/storage/image_cache_service.dart';
+import 'package:kazumi/services/player/player_video_cache_service.dart';
 
 class StorageSettingsPage extends StatefulWidget {
   const StorageSettingsPage({super.key});
@@ -17,6 +18,45 @@ class _StorageSettingsPageState extends State<StorageSettingsPage> {
   final _cache = ImageCacheService();
   late Future<int> _cacheSize = _cache.sizeInBytes();
   bool _clearing = false;
+  bool _clearingVideo = false;
+  late Future<int> _videoCacheSize = PlayerVideoCacheService.size();
+
+  Future<void> _clearVideoCache() async {
+    if (_clearingVideo) return;
+    final confirmed = await KazumiDialog.show<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.video_file_outlined),
+        title: const Text('清除视频缓存？'),
+        content: const Text('仅删除随播播放器的临时缓存，不会删除视频下载、播放记录或设置。正在播放时不可清理。'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消')),
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('清除缓存')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _clearingVideo = true);
+    try {
+      final cleared = await PlayerVideoCacheService.clearIfIdle();
+      if (mounted) {
+        _message(cleared ? '视频临时缓存已清除' : '播放器正在使用缓存，请退出播放页后再清除');
+      }
+    } catch (_) {
+      if (mounted) _message('视频缓存清理失败');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _clearingVideo = false;
+          _videoCacheSize = PlayerVideoCacheService.size();
+        });
+      }
+    }
+  }
 
   void _refreshSize() => setState(() => _cacheSize = _cache.sizeInBytes());
 
@@ -92,6 +132,20 @@ class _StorageSettingsPageState extends State<StorageSettingsPage> {
                                 icon: const Icon(Icons.refresh_rounded),
                               )
                             : const Icon(Icons.cleaning_services_rounded),
+                  ),
+                  SettingsTile(
+                    leading: Icons.video_file_outlined,
+                    title: const Text('清除视频缓存'),
+                    description: FutureBuilder<int>(
+                      future: _videoCacheSize,
+                      builder: (_, snapshot) => Text(_clearingVideo
+                          ? '正在清理…'
+                          : snapshot.hasData
+                              ? '${(snapshot.data! / (1024 * 1024)).toStringAsFixed(2)} MB'
+                              : '正在统计…'),
+                    ),
+                    enabled: !_clearingVideo,
+                    onPressed: (_) => _clearVideoCache(),
                   ),
                 ],
               ),
