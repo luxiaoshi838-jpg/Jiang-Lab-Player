@@ -30,15 +30,33 @@ class PlayerVideoCacheService {
     if (_active > 0) return;
     final directory = await _directory();
     final threshold = DateTime.now().subtract(const Duration(days: 7));
+    final candidates = <({File file, DateTime changed, int size})>[];
+    var totalBytes = 0;
     await for (final entry in directory.list(followLinks: false)) {
       if (_active > 0) return;
       if (entry is! File) continue;
       try {
-        if ((await entry.lastModified()).isBefore(threshold)) {
+        final modified = await entry.lastModified();
+        if (modified.isBefore(threshold)) {
           await entry.delete();
+        } else {
+          final size = await entry.length();
+          totalBytes += size;
+          candidates.add((file: entry, changed: modified, size: size));
         }
       } catch (_) {
         // Old-file cleanup never blocks playback.
+      }
+    }
+    // Bound idle mpv disk cache to 256 MiB, trimming down to 192 MiB.
+    if (totalBytes > 256 * 1024 * 1024) {
+      candidates.sort((a, b) => a.changed.compareTo(b.changed));
+      for (final item in candidates) {
+        if (_active > 0 || totalBytes <= 192 * 1024 * 1024) break;
+        try {
+          await item.file.delete();
+          totalBytes -= item.size;
+        } catch (_) {}
       }
     }
   }
