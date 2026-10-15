@@ -1,0 +1,22 @@
+name: Suibo 2.3.19 playback safety
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  player:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Recovery and safe HLS tests
+        run: flutter test test/playback_recovery_service_test.dart test/hls_preload_service_test.dart test/player_cache_policy_test.dart test/episode_ref_test.dart
+      - name: Analyze only modified playback files
+        run: |
+          flutter analyze lib/pages/info/source_sheet.dart lib/pages/info/source_sheet_view.dart lib/pages/video/video_controller.dart lib/pages/video/video_page.dart lib/services/plugin/plugin_search_service.dart lib/services/player/source_health_service.dart lib/services/player/playback_recovery_service.dart lib/services/player/hls_preload_service.dart lib/services/storage/settings_keys.dart lib/pages/settings/player_settings.dart
