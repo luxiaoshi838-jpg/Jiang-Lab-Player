@@ -82,7 +82,9 @@ class HlsPreloadService {
       }
       if (directVideoFormat(mediaUrl) != VideoSourceFormat.hls ||
           !VideoSourceFailure.isOnlineMediaUrl(mediaUrl) ||
-          !allowed() || ticket != _generation) return;
+          !allowed() || ticket != _generation) {
+        return;
+      }
 
       final client = http.Client();
       _client = client;
@@ -92,7 +94,9 @@ class HlsPreloadService {
       final response = await client.send(request).timeout(
           const Duration(seconds: 8));
       if (response.statusCode != 200 || ticket != _generation ||
-          !allowed()) return;
+          !allowed()) {
+        return;
+      }
       final bytes = BytesBuilder(copy: false);
       await for (final chunk in response.stream) {
         if (ticket != _generation || !allowed()) return;

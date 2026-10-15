@@ -154,7 +154,9 @@ class _VideoPageState extends State<VideoPage>
       final duration = playerController.playback.playerDuration;
       if (duration <= const Duration(minutes: 3) ||
           position < const Duration(seconds: 30) ||
-          duration - position > const Duration(seconds: 90)) return;
+          duration - position > const Duration(seconds: 90)) {
+        return;
+      }
       _preloadScheduled = true;
       unawaited(_tryPreloadNextEpisode(active));
     }));
@@ -167,7 +169,9 @@ class _VideoPageState extends State<VideoPage>
       try {
         final transports = await Connectivity().checkConnectivity();
         if (!transports.contains(ConnectivityResult.wifi) &&
-            !transports.contains(ConnectivityResult.ethernet)) return;
+            !transports.contains(ConnectivityResult.ethernet)) {
+          return;
+        }
       } catch (_) {
         return;
       }
@@ -180,7 +184,9 @@ class _VideoPageState extends State<VideoPage>
   void _handlePlaybackFailure(Object error, int generation) {
     if (!mounted || _isExiting || generation != _episodeGeneration ||
         _recoveryScheduled || videoPageController.isOfflineMode ||
-        !GStorage.getSetting(SettingsKeys.smartPlayback)) return;
+        !GStorage.getSetting(SettingsKeys.smartPlayback)) {
+      return;
+    }
     final action = _recovery.choose(error);
     if (action == RecoveryAction.stop) return;
     _recoveryScheduled = true;

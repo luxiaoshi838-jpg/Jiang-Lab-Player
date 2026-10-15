@@ -840,7 +840,9 @@ abstract class _VideoPageController with Store implements Disposable {
     final current = _resolveOnlineEpisode(selection.episode, road: selection.road);
     final next = _resolveOnlineEpisode(selection.episode + 1, road: selection.road);
     if (current?.sortNumber == null || next?.sortNumber == null ||
-        next!.sortNumber != current!.sortNumber! + 1) return;
+        next!.sortNumber != current!.sortNumber! + 1) {
+      return;
+    }
     final url = normalizeEpisodeUrl(currentPlugin.baseUrl, next.pageUrl);
     await _hlsPreload.prepare(
       pageUrl: url,
