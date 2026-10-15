@@ -108,14 +108,23 @@ class _VideoPageState extends State<VideoPage>
     bool active() => mounted && !_isExiting &&
         generation == _episodeGeneration &&
         identical(media, playerController.playback.mediaPlayer);
-    _playbackObservations.add(media.stream.videoParams.listen((_) {
-      if (!active() || _measuredFirstFrame) return;
+    void recordReady({required bool hasVideo}) {
+      if (!active() || _measuredFirstFrame || !hasVideo) return;
       _measuredFirstFrame = true;
       final since = _playStartedAt;
       if (since != null) {
+        // Decoder video parameters are a startup proxy, not proof of
+        // the first frame being presented on the screen.
         SourceHealthService.instance.recordPlaybackStart(
             pluginName, DateTime.now().difference(since));
       }
+    }
+
+    // player.open may emit videoParams before this view attaches listeners.
+    final initial = media.state.videoParams;
+    recordReady(hasVideo: (initial.w ?? 0) > 0 && (initial.h ?? 0) > 0);
+    _playbackObservations.add(media.stream.videoParams.listen((params) {
+      recordReady(hasVideo: (params.w ?? 0) > 0 && (params.h ?? 0) > 0);
     }));
     _playbackObservations.add(media.stream.error.listen((error) {
       if (!active()) return;
