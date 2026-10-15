@@ -12,7 +12,9 @@ class PlayerVideoCacheService {
 
   static void markOpened() => _active++;
   static void markClosed() {
-    if (_active > 0) _active--;
+    if (_active > 0) {
+      _active--;
+    }
   }
 
   static Future<Directory> _directory() async {
@@ -26,15 +28,23 @@ class PlayerVideoCacheService {
 
   static Future<void> prepare() async {
     final pendingClear = _clearing;
-    if (pendingClear != null) await pendingClear;
-    if (_active > 0) return;
+    if (pendingClear != null) {
+      await pendingClear;
+    }
+    if (_active > 0) {
+      return;
+    }
     final directory = await _directory();
     final threshold = DateTime.now().subtract(const Duration(days: 7));
     final candidates = <({File file, DateTime changed, int size})>[];
     var totalBytes = 0;
     await for (final entry in directory.list(followLinks: false)) {
-      if (_active > 0) return;
-      if (entry is! File) continue;
+      if (_active > 0) {
+        return;
+      }
+      if (entry is! File) {
+        continue;
+      }
       try {
         final modified = await entry.lastModified();
         if (modified.isBefore(threshold)) {
@@ -52,7 +62,9 @@ class PlayerVideoCacheService {
     if (totalBytes > 256 * 1024 * 1024) {
       candidates.sort((a, b) => a.changed.compareTo(b.changed));
       for (final item in candidates) {
-        if (_active > 0 || totalBytes <= 192 * 1024 * 1024) break;
+        if (_active > 0 || totalBytes <= 192 * 1024 * 1024) {
+          break;
+        }
         try {
           await item.file.delete();
           totalBytes -= item.size;
@@ -65,7 +77,9 @@ class PlayerVideoCacheService {
     final directory = await _directory();
     var bytes = 0;
     await for (final entry in directory.list(followLinks: false)) {
-      if (entry is! File) continue;
+      if (entry is! File) {
+        continue;
+      }
       try {
         bytes += await entry.length();
       } catch (_) {}
@@ -74,7 +88,9 @@ class PlayerVideoCacheService {
   }
 
   static Future<bool> clearIfIdle() async {
-    if (_active > 0 || _clearing != null) return false;
+    if (_active > 0 || _clearing != null) {
+      return false;
+    }
     final task = _clearFiles();
     _clearing = task;
     try {
@@ -88,8 +104,12 @@ class PlayerVideoCacheService {
   static Future<void> _clearFiles() async {
     final directory = await _directory();
     await for (final entry in directory.list(followLinks: false)) {
-      if (_active > 0) return;
-      if (entry is File) await entry.delete();
+      if (_active > 0) {
+        return;
+      }
+      if (entry is File) {
+        await entry.delete();
+      }
     }
   }
 }
