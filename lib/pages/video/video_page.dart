@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:io';
+
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 import 'package:canvas_danmaku/models/danmaku_content_item.dart';
 import 'package:flutter/material.dart';
@@ -76,6 +79,7 @@ class _VideoPageState extends State<VideoPage>
   DateTime? _playStartedAt;
   bool _measuredFirstFrame = false;
   bool _preloadScheduled = false;
+  bool _recoveryScheduled = false;
   bool _foreground = true;
   int _episodeGeneration = 0;
 
@@ -152,17 +156,34 @@ class _VideoPageState extends State<VideoPage>
           position < const Duration(seconds: 30) ||
           duration - position > const Duration(seconds: 90)) return;
       _preloadScheduled = true;
-      unawaited(videoPageController.preloadNextEpisode(
-          allowed: () => active() && _preloadAllowed));
+      unawaited(_tryPreloadNextEpisode(active));
     }));
+  }
+
+  Future<void> _tryPreloadNextEpisode(bool Function() active) async {
+    if (!active() || !_preloadAllowed) return;
+    if (Platform.isAndroid) {
+      // A stale 'unmetered' reading must never start mobile-data preloads.
+      try {
+        final transports = await Connectivity().checkConnectivity();
+        if (!transports.contains(ConnectivityResult.wifi) &&
+            !transports.contains(ConnectivityResult.ethernet)) return;
+      } catch (_) {
+        return;
+      }
+    }
+    if (!active() || !_preloadAllowed) return;
+    await videoPageController.preloadNextEpisode(
+        allowed: () => active() && _preloadAllowed);
   }
 
   void _handlePlaybackFailure(Object error, int generation) {
     if (!mounted || _isExiting || generation != _episodeGeneration ||
-        videoPageController.isOfflineMode ||
+        _recoveryScheduled || videoPageController.isOfflineMode ||
         !GStorage.getSetting(SettingsKeys.smartPlayback)) return;
     final action = _recovery.choose(error);
     if (action == RecoveryAction.stop) return;
+    _recoveryScheduled = true;
     final position = playerController.playback.playerPosition.inSeconds;
     final speed = playerController.playback.playerSpeed;
     final danmakuOn = playerController.danmaku.danmakuOn;
@@ -195,7 +216,6 @@ class _VideoPageState extends State<VideoPage>
           return;
         }
         _cancelPlaybackObservations();
-        _recovery.cancel();
         final next = ++_episodeGeneration;
         KazumiDialog.showToast(message: '来源暂时不可用，已找到同集备用来源');
         _playStartedAt = DateTime.now();
@@ -206,6 +226,7 @@ class _VideoPageState extends State<VideoPage>
         playerController.danmaku.setDanmakuEnabled(danmakuOn);
         _measuredFirstFrame = false;
         _preloadScheduled = false;
+        _recoveryScheduled = false;
         _watchPlayback(next);
       }());
     }
@@ -427,6 +448,7 @@ class _VideoPageState extends State<VideoPage>
     if (!automaticRecovery) _recovery.cancel();
     _cancelPlaybackObservations();
     final generation = ++_episodeGeneration;
+    _recoveryScheduled = false;
     _playStartedAt = DateTime.now();
     _measuredFirstFrame = false;
     _preloadScheduled = false;
