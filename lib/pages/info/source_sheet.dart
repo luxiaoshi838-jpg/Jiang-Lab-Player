@@ -28,6 +28,8 @@ import 'package:kazumi/services/video_source/video_catalog_scope.dart';
 import 'package:kazumi/services/video_source/official_video_search.dart';
 import 'package:kazumi/services/plugin/captcha_verification_service.dart';
 import 'package:kazumi/services/plugin/plugin_search_service.dart';
+import 'package:kazumi/services/player/source_health_service.dart';
+import 'package:kazumi/services/storage/storage.dart';
 import 'package:kazumi/services/plugin/rule_engine_models.dart'
     show RuleCancelToken;
 import 'package:kazumi/utils/device.dart';
@@ -57,6 +59,11 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
   final PluginsController _pluginsController = inject<PluginsController>();
   final Map<String, String> _sourceKeywords = {};
   bool _includeAnimeRules = false;
+  final SourceHealthService _health = SourceHealthService.instance;
+
+  void _refreshHealth() {
+    if (mounted) setState(() {});
+  }
 
   List<Plugin> get _eligiblePlugins =>
       _pluginsController.pluginList
@@ -93,6 +100,7 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
   @override
   void initState() {
     super.initState();
+    _health.addListener(_refreshHealth);
     final item = widget.infoController.bangumiItem;
     _keyword = item.nameCn.isEmpty ? item.name : item.nameCn;
     _searchService = PluginSearchService(
@@ -131,6 +139,7 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
 
   @override
   void dispose() {
+    _health.removeListener(_refreshHealth);
     _searchService.cancel();
     _captchaFlow.dispose();
     super.dispose();
@@ -213,6 +222,7 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
   Future<void> _openSearchItem(String name, SearchItem searchItem) async {
     if (dialogs.isRunning) return;
     final plugin = _pluginFor(name);
+    final clock = Stopwatch()..start();
     await dialogs.run((task) async {
       final cancelToken = RuleCancelToken();
       // Single videos and direct live streams have no episode page.
@@ -235,6 +245,7 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
               ),
             );
       if (roads.isEmpty) throw ChapterErrorException(plugin.name);
+      _health.recordPlaylist(name, success: true, latency: clock.elapsed);
       task.withContext((context) {
         final onSelected = widget.onSourceSelected;
         if (onSelected != null) {
@@ -254,6 +265,7 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
         );
       });
     }, onError: (error, stackTrace) {
+      _health.recordPlaylist(name, success: false, latency: clock.elapsed);
       KazumiLogger().w('SourceSheet: failed to query playlist', error: error);
       KazumiDialog.showToast(message: VideoSourceFailure.playlist(error));
     });
@@ -314,9 +326,16 @@ class _SourceSheetState extends State<SourceSheet> with KazumiDialogOwner {
             }
             if (group.hasResults) firstResultSource ??= group.name;
           }
+          final groups = groupsByName.values.toList();
+          final smart = GStorage.getSetting(SettingsKeys.smartPlayback);
+          if (smart) {
+            final workId = widget.infoController.bangumiItem.id;
+            groups.sort((a, b) =>
+                _health.compare(a.name, b.name, workId: workId));
+          }
           return _SourceSheetView(
             keyword: _keyword,
-            groups: groupsByName.values.toList(),
+            groups: groups,
             hiddenAnimeCount: _hiddenAnimeCount,
             onSearchAnimeRules: _showAndSearchAnimeRules,
             firstResultSource: firstResultSource,

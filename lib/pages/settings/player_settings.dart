@@ -38,6 +38,8 @@ class _PlayerSettingsPageState extends State<PlayerSettingsPage> {
   late bool playerDisableAnimations;
   late bool forceAdBlocker;
   late bool autoPlayNext;
+  late bool smartPlayback;
+  late bool nextEpisodePreload;
   late bool backgroundPlayback;
   late bool brightnessVolumeGesture;
   late int playerButtonSkipTime;
@@ -69,6 +71,9 @@ class _PlayerSettingsPageState extends State<PlayerSettingsPage> {
     showPlayerError = GStorage.getSetting<bool>(SettingsKeys.showPlayerError);
     playerDebugMode = GStorage.getSetting<bool>(SettingsKeys.playerDebugMode);
     autoPlayNext = GStorage.getSetting<bool>(SettingsKeys.autoPlayNext);
+    smartPlayback = GStorage.getSetting<bool>(SettingsKeys.smartPlayback);
+    nextEpisodePreload =
+        GStorage.getSetting<bool>(SettingsKeys.nextEpisodePreload);
     backgroundPlayback =
         GStorage.getSetting<bool>(SettingsKeys.backgroundPlayback);
     playerDisableAnimations =
@@ -299,6 +304,35 @@ class _PlayerSettingsPageState extends State<PlayerSettingsPage> {
                   context.pushNamed('/settings/player/super');
                 },
                 title: Text('超分辨率'),
+              ),
+            ],
+          ),
+          SettingsSection(
+            title: Text('智能播放'),
+            tiles: [
+              SettingsTile.switchTile(
+                leading: Icons.auto_awesome_rounded,
+                title: Text('智能播放优化'),
+                description: Text('根据已验证的播放质量排列来源，有限恢复网络错误'),
+                initialValue: smartPlayback,
+                onToggle: (value) async {
+                  smartPlayback = value ?? !smartPlayback;
+                  await GStorage.putSetting<bool>(
+                      SettingsKeys.smartPlayback, smartPlayback);
+                  if (mounted) setState(() {});
+                },
+              ),
+              SettingsTile.switchTile(
+                leading: Icons.playlist_play_rounded,
+                title: Text('下一集预加载'),
+                description: Text('非计量网络提前解析下一集；不重复下载 HLS 分片'),
+                initialValue: nextEpisodePreload,
+                onToggle: (value) async {
+                  nextEpisodePreload = value ?? !nextEpisodePreload;
+                  await GStorage.putSetting<bool>(
+                      SettingsKeys.nextEpisodePreload, nextEpisodePreload);
+                  if (mounted) setState(() {});
+                },
               ),
             ],
           ),
