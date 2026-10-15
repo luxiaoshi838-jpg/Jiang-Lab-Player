@@ -25,7 +25,8 @@ class PlayerVideoCacheService {
   static Future<String> directoryPath() async => (await _directory()).path;
 
   static Future<void> prepare() async {
-    await _clearing;
+    final pendingClear = _clearing;
+    if (pendingClear != null) await pendingClear;
     if (_active > 0) return;
     final directory = await _directory();
     final threshold = DateTime.now().subtract(const Duration(days: 7));
