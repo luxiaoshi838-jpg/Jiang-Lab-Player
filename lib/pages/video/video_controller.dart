@@ -45,7 +45,7 @@ class VideoPageController = _VideoPageController with _$VideoPageController;
 /// Explicit episode identity for automatic recovery only.
 int? verifiedPlayableEpisodeNumber(String label) {
   final value = label.trim();
-  if (RegExp(r'^\d{1,3}\$').hasMatch(value)) {
+  if (RegExp(r'^\d{1,3}$').hasMatch(value)) {
     final n = int.tryParse(value);
     return n != null && n > 0 ? n : null;
   }
@@ -55,7 +55,7 @@ int? verifiedPlayableEpisodeNumber(String label) {
     final n = int.tryParse(numbered.single.group(1)!);
     return n != null && n > 0 ? n : null;
   }
-  final ep = RegExp(r'^(?:EP|E)(\d{1,3})\$', caseSensitive: false)
+  final ep = RegExp(r'^(?:EP|E)(\d{1,3})$', caseSensitive: false)
       .firstMatch(value);
   final n = ep == null ? null : int.tryParse(ep.group(1)!);
   return n != null && n > 0 ? n : null;
