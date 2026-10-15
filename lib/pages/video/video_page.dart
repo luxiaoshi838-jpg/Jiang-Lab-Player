@@ -206,16 +206,28 @@ class _VideoPageState extends State<VideoPage>
       final delay = _recovery.delay;
       KazumiDialog.showToast(message: '网络异常，正在尝试恢复播放');
       unawaited(() async {
-        await Future.delayed(delay);
-        if (!mounted || generation != _episodeGeneration || _isExiting) return;
-        final selection = videoPageController.playbackEpisode;
-        await changeEpisode(selection.episode, currentRoad: selection.road,
-            offset: position, automaticRecovery: true,
-            recoverySpeed: speed, recoveryDanmaku: danmakuOn);
+        try {
+          await Future.delayed(delay);
+          if (!mounted || generation != _episodeGeneration || _isExiting) return;
+          final selection = videoPageController.playbackEpisode;
+          await changeEpisode(selection.episode, currentRoad: selection.road,
+              offset: position, automaticRecovery: true,
+              recoverySpeed: speed, recoveryDanmaku: danmakuOn);
+        } catch (error) {
+          if (mounted && !_isExiting) {
+            KazumiDialog.showToast(message: '自动恢复失败，请手动重试或更换来源');
+          }
+        } finally {
+          // An old retry must never reset the recovery lock for a newer episode.
+          if (mounted && generation == _episodeGeneration) {
+            _recoveryScheduled = false;
+          }
+        }
       }());
     } else if (action == RecoveryAction.switchSource) {
       unawaited(() async {
         final token = RuleCancelToken();
+        try {
         _alternativeLookup?.cancel();
         _alternativeLookup = token;
         final found = await videoPageController.findVerifiedAlternative(
@@ -242,7 +254,24 @@ class _VideoPageState extends State<VideoPage>
         _measuredFirstFrame = false;
         _preloadScheduled = false;
         _recoveryScheduled = false;
-        _watchPlayback(next);
+        if (videoPageController.errorMessage == null) {
+          _watchPlayback(next);
+        } else {
+          SourceHealthService.instance.recordFailure(found.plugin.name);
+          KazumiDialog.showToast(message: '备用来源未能播放，请手动选择其他来源');
+        }
+        } catch (error) {
+          if (mounted && !_isExiting && !token.isCancelled) {
+            KazumiDialog.showToast(message: '换源失败，请手动选择其他来源');
+          }
+        } finally {
+          if (identical(_alternativeLookup, token)) {
+            _alternativeLookup = null;
+          }
+          if (mounted && generation == _episodeGeneration) {
+            _recoveryScheduled = false;
+          }
+        }
       }());
     }
   }
