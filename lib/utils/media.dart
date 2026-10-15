@@ -1,3 +1,4 @@
+import 'package:kazumi/services/player/player_video_cache_service.dart';
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
@@ -35,10 +36,7 @@ int extractEpisodeNumber(String input) {
   return 0;
 }
 
-Future<String> getPlayerTempPath() async {
-  final directory = await getTemporaryDirectory();
-  return directory.path;
-}
+Future<String> getPlayerTempPath() => PlayerVideoCacheService.directoryPath();
 
 String buildShadersAbsolutePath(String baseDirectory, List<String> shaders) {
   final absolutePaths = shaders.map((shader) {
