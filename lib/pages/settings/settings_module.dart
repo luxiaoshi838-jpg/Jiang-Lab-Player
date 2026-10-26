@@ -23,6 +23,7 @@ import 'package:kazumi/pages/settings/sync/webdav_server_page.dart';
 import 'package:kazumi/pages/settings/sync/webdav_sync_page.dart';
 import 'package:kazumi/pages/settings/theme_settings_page.dart';
 import 'package:kazumi/pages/settings/update_settings.dart';
+import 'package:kazumi/pages/settings/yt_dlp_url_page.dart';
 import 'package:kazumi/request/config/api_endpoints.dart';
 import 'package:kazumi/services/sync/danmaku_shield_sync_service.dart';
 
@@ -48,6 +49,7 @@ final settingsModule = createModule(
             '/update',
             child: (context, state) => const UpdateSettingsPage(),
           )
+          ..route('/yt-dlp', child: (context, state) => const YtDlpUrlPage())
           ..route('/storage',
               child: (context, state) => const StorageSettingsPage())
           ..route('/storage/logs', child: (context, state) => const LogsPage())
