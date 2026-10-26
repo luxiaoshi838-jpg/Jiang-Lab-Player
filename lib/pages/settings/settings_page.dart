@@ -63,6 +63,12 @@ const List<_SettingsGroup> _settingsGroups = [
         path: '/settings/plugin',
       ),
       _SettingsCategory(
+        label: '视频网址解析',
+        description: 'yt-dlp 视频网页解析与播放（Windows）',
+        icon: Icons.link_rounded,
+        path: '/settings/yt-dlp',
+      ),
+      _SettingsCategory(
         label: '下载设置',
         description: '并发数与弹幕缓存',
         icon: Icons.downloading_rounded,
